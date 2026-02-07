@@ -1,561 +1,696 @@
 <!DOCTYPE html>
-<html lang="he" dir="rtl">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>TITAN ELITE: NEURAL COMBAT</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CYBER-FIGHT PRO: BILLION DOLLAR ENGINE</title>
     
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap');
 
         :root {
             --neon-cyan: #00f3ff;
-            --neon-red: #ff003c;
-            --neon-gold: #ffd700;
-            --hud-bg: rgba(0, 10, 20, 0.85);
-            --glass: rgba(255, 255, 255, 0.1);
+            --neon-magenta: #ff00ff;
+            --neon-danger: #ff2a2a;
+            --neon-green: #0aff0a;
+            --hud-bg: rgba(10, 15, 20, 0.85);
         }
 
-        body { margin: 0; background: #000; overflow: hidden; font-family: 'Share Tech Mono', monospace; color: white; user-select: none; }
-        
-        #titan-os { position: relative; width: 100vw; height: 100vh; overflow: hidden; }
-
-        /* Video Layer */
-        video { position: absolute; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); opacity: 1; z-index: 0; }
-        
-        /* Game Canvas */
-        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 5; transform: scaleX(-1); }
-
-        /* HUD Interface */
-        #hud-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
-
-        /* Top Stats Bar */
-        .top-bar {
-            display: flex; justify-content: space-between; padding: 20px;
-            background: linear-gradient(180deg, rgba(0,0,0,0.9) 0%, transparent 100%);
-        }
-        .stat-module { text-align: center; border: 1px solid var(--neon-cyan); padding: 5px 15px; background: rgba(0,0,0,0.6); box-shadow: 0 0 10px var(--neon-cyan); transform: skewX(-15deg); }
-        .stat-val { font-size: 1.5rem; color: #fff; font-weight: bold; }
-        .stat-label { font-size: 0.8rem; color: var(--neon-cyan); letter-spacing: 2px; }
-
-        /* Health & Stamina Bars */
-        .bars-wrapper { position: absolute; bottom: 30px; width: 100%; padding: 0 50px; display: flex; justify-content: space-between; align-items: flex-end; box-sizing: border-box; }
-        
-        .player-hud, .enemy-hud { width: 40%; }
-        
-        .bar-frame { height: 20px; background: #333; border: 2px solid #555; transform: skewX(-20deg); margin-bottom: 5px; position: relative; overflow: hidden; }
-        .hp-fill { height: 100%; width: 100%; transition: width 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-        .stamina-fill { height: 10px; width: 100%; background: var(--neon-gold); transition: width 0.5s; }
-        
-        #p-hp { background: var(--neon-cyan); box-shadow: 0 0 15px var(--neon-cyan); }
-        #e-hp { background: var(--neon-red); box-shadow: 0 0 15px var(--neon-red); }
-
-        /* Tactical Center Ring */
-        #reticle {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 300px; height: 300px; border: 2px dashed rgba(0, 243, 255, 0.3);
-            border-radius: 50%; pointer-events: none; transition: 0.1s;
+        body { 
+            margin: 0; background-color: #050505; overflow: hidden; 
+            font-family: 'Rajdhani', sans-serif; color: white; user-select: none;
         }
 
-        /* Message Log */
-        #comms-log {
-            position: absolute; top: 20%; right: 20px; width: 250px;
-            text-align: right; font-size: 0.9rem; text-shadow: 1px 1px 2px black;
-        }
-        .log-entry { margin-bottom: 5px; opacity: 0.8; border-right: 3px solid var(--neon-cyan); padding-right: 10px; animation: fadeIn 0.3s; }
-
-        /* Effects */
-        .damage-flash { animation: redFlash 0.3s ease-out; }
-        @keyframes redFlash { 0% { box-shadow: inset 0 0 0 0 red; } 50% { box-shadow: inset 0 0 100px 50px red; } 100% { box-shadow: inset 0 0 0 0 red; } }
+        /* --- LAYOUT & LAYERS --- */
+        #render-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
         
-        @keyframes scanline { 0% { top: 0%; } 100% { top: 100%; } }
-        .scan-fx { position: absolute; width: 100%; height: 5px; background: rgba(0, 255, 255, 0.3); opacity: 0.5; animation: scanline 3s infinite linear; pointer-events: none; z-index: 8; }
+        /* Video hidden, used for AI processing only */
+        video { 
+            position: absolute; bottom: 10px; right: 10px; width: 200px; 
+            transform: scaleX(-1); opacity: 0.3; z-index: 2; border: 1px solid var(--neon-cyan);
+            border-radius: 8px;
+        }
 
-        /* Menu */
-        #menu-overlay {
+        /* --- HUD (HEADS UP DISPLAY) --- */
+        #hud-layer { 
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
+            z-index: 10; pointer-events: none; display: none;
+        }
+
+        .bar-wrap {
+            position: absolute; top: 40px; width: 400px; height: 40px;
+            background: rgba(0,0,0,0.6); border: 2px solid #444;
+            transform: skewX(-20deg); overflow: hidden;
+        }
+        .hp-fill { height: 100%; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        
+        #p-bar-box { left: 40px; border-bottom: 4px solid var(--neon-cyan); }
+        #p-hp { background: linear-gradient(90deg, #0055ff, var(--neon-cyan)); width: 100%; }
+        
+        #e-bar-box { right: 40px; border-bottom: 4px solid var(--neon-danger); }
+        #e-hp { background: linear-gradient(90deg, var(--neon-danger), #ff5500); width: 100%; float: right; }
+
+        .fighter-name {
+            position: absolute; top: 10px; font-family: 'Orbitron'; font-size: 1.5rem; letter-spacing: 2px;
+        }
+        #p-name { left: 40px; color: var(--neon-cyan); }
+        #e-name { right: 40px; color: var(--neon-danger); text-align: right; }
+
+        /* --- CENTER NOTIFICATIONS --- */
+        #center-msg {
+            position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%);
+            font-family: 'Orbitron'; font-size: 5rem; font-weight: 900;
+            text-align: center; text-shadow: 0 0 20px rgba(255,255,255,0.5);
+            opacity: 0; transition: opacity 0.2s;
+        }
+
+        /* --- COACH PANEL --- */
+        #coach-feedback {
+            position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%);
+            width: 600px; text-align: center;
+            background: linear-gradient(180deg, rgba(0,0,0,0), var(--hud-bg));
+            padding: 20px; border-radius: 10px; border-top: 2px solid var(--neon-green);
+        }
+        .coach-txt { font-size: 2rem; font-weight: 700; text-transform: uppercase; }
+
+        /* --- MENUS --- */
+        #main-menu {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: black; z-index: 100; display: flex; flex-direction: column;
-            justify-content: center; align-items: center; text-align: center;
+            background: radial-gradient(circle, #1a1a1a 0%, #000000 100%);
+            z-index: 100; display: flex; flex-direction: column; 
+            justify-content: center; align-items: center;
         }
-        h1 { font-family: 'Orbitron', sans-serif; font-size: 4rem; color: white; text-shadow: 0 0 30px var(--neon-cyan); margin-bottom: 0; }
+
+        h1 { 
+            font-family: 'Orbitron'; font-size: 6rem; margin: 0; 
+            background: -webkit-linear-gradient(var(--neon-cyan), var(--neon-magenta));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 50px rgba(0, 243, 255, 0.4);
+        }
+
         .menu-btn {
-            background: transparent; color: var(--neon-cyan); border: 2px solid var(--neon-cyan);
-            padding: 20px 60px; font-size: 1.5rem; margin: 15px; cursor: pointer;
-            font-family: 'Orbitron'; letter-spacing: 3px; transition: 0.3s;
-            clip-path: polygon(15px 0, 100% 0, 100% calc(100% - 15px), calc(100% - 15px) 100%, 0 100%, 0 15px);
+            pointer-events: auto; background: transparent; 
+            border: 2px solid #555; color: white;
+            padding: 20px 80px; font-size: 1.5rem; margin: 15px;
+            font-family: 'Orbitron'; letter-spacing: 3px; cursor: pointer;
+            transition: 0.3s; position: relative; overflow: hidden;
+            width: 400px;
         }
-        .menu-btn:hover { background: var(--neon-cyan); color: black; box-shadow: 0 0 40px var(--neon-cyan); }
-        
-        .loading { color: var(--neon-gold); margin-top: 20px; animation: blink 1s infinite; display: none; }
-        @keyframes blink { 50% { opacity: 0; } }
+        .menu-btn::before {
+            content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: 0.5s;
+        }
+        .menu-btn:hover { border-color: var(--neon-cyan); box-shadow: 0 0 20px var(--neon-cyan); }
+        .menu-btn:hover::before { left: 100%; }
+
+        .btn-fight:hover { border-color: var(--neon-danger); box-shadow: 0 0 20px var(--neon-danger); }
+
+        #loading-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; z-index: 200; display: none;
+            flex-direction: column; justify-content: center; align-items: center;
+        }
+        .loader {
+            border: 5px solid #333; border-top: 5px solid var(--neon-cyan);
+            border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* DAMAGE EFFECT */
+        .damage-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: radial-gradient(circle, transparent 50%, var(--neon-danger) 100%);
+            opacity: 0; pointer-events: none; z-index: 50; transition: opacity 0.1s;
+        }
+
+        /* BACK BUTTON */
+        #exit-btn {
+            position: absolute; top: 20px; right: 20px; z-index: 1000; pointer-events: auto;
+            background: #333; color: white; border: 1px solid #666; padding: 10px 20px;
+            cursor: pointer; display: none; font-family: 'Orbitron';
+        }
+        #exit-btn:hover { background: var(--neon-danger); border-color: white; }
 
     </style>
 </head>
 <body>
 
-<div id="titan-os">
-    <div id="menu-overlay">
-        <h1>TITAN ELITE</h1>
-        <p style="color:#888; letter-spacing:5px; margin-bottom:50px;">NEURAL COMBAT SYSTEM V3.0</p>
+    <div id="main-menu">
+        <h1>CYBER FIGHT</h1>
+        <p style="color: #888; letter-spacing: 5px; margin-bottom: 50px;">NEURAL COMBAT SIMULATOR v9.0</p>
         
-        <button class="menu-btn" onclick="bootSystem('coach')">TRAINING PROTOCOL</button>
-        <button class="menu-btn" style="border-color:var(--neon-red); color:var(--neon-red);" onclick="bootSystem('fight')">COMBAT SIMULATION</button>
-        
-        <div id="loader" class="loading">INITIALIZING NEURAL NETWORKS...</div>
+        <button class="menu-btn" onclick="initEngine('coach')">SENSEI MODE (AI COACH)</button>
+        <button class="menu-btn btn-fight" onclick="selectDifficulty()">COMBAT ARENA</button>
     </div>
 
-    <video id="webcam" autoplay playsinline></video>
-    <div class="scan-fx"></div>
-    <canvas id="game-canvas"></canvas>
-
-    <div id="hud-layer" style="display:none;">
-        <div class="top-bar">
-            <div class="stat-module">
-                <div class="stat-val" id="score-val">0</div>
-                <div class="stat-label">SCORE</div>
-            </div>
-            <div class="stat-module">
-                <div class="stat-val" id="velocity-val">0</div>
-                <div class="stat-label">SPEED (m/s)</div>
-            </div>
-            <div class="stat-module">
-                <div class="stat-val" id="combo-val">0</div>
-                <div class="stat-label">COMBO</div>
-            </div>
+    <div id="difficulty-select" style="display:none;" class="menu-overlay">
         </div>
 
-        <div id="comms-log"></div>
-        <div id="reticle"></div>
+    <div id="loading-overlay">
+        <div class="loader"></div>
+        <div style="margin-top:20px; color: var(--neon-cyan);">INITIALIZING NEURAL NETWORKS...</div>
+    </div>
 
-        <div class="bars-wrapper">
-            <div class="player-hud">
-                <div style="color:var(--neon-cyan); margin-bottom:5px;">OPERATOR STATUS</div>
-                <div class="bar-frame"><div id="p-hp" class="hp-fill"></div></div>
-                <div class="bar-frame" style="height:5px; border:none;"><div id="p-stam" class="stamina-fill"></div></div>
-            </div>
-            <div class="enemy-hud" id="enemy-ui" style="opacity:0;">
-                <div style="color:var(--neon-red); margin-bottom:5px; text-align:left;">THREAT LEVEL</div>
-                <div class="bar-frame"><div id="e-hp" class="hp-fill"></div></div>
-            </div>
+    <div id="render-layer"></div>
+    <div class="damage-overlay" id="dmg-effect"></div>
+    <video id="webcam" autoplay playsinline muted></video>
+    <button id="exit-btn" onclick="returnToMenu()">EXIT SIMULATION</button>
+
+    <div id="hud-layer">
+        <div id="p-name">PLAYER 1</div>
+        <div id="p-bar-box" class="bar-wrap"><div id="p-hp" class="hp-fill"></div></div>
+
+        <div id="e-name">CYBER-BOT X</div>
+        <div id="e-bar-box" class="bar-wrap"><div id="e-hp" class="hp-fill"></div></div>
+
+        <div id="center-msg">FIGHT!</div>
+
+        <div id="coach-feedback" style="display:none;">
+            <div id="coach-main" class="coach-txt" style="color:var(--neon-cyan);">ANALYZING STANCE...</div>
+            <div id="coach-sub" style="color:#aaa; font-size: 1.2rem;">KEEP YOUR HANDS UP</div>
         </div>
     </div>
-</div>
 
 <script>
-    /* --- SYSTEM CORE CONFIGURATION --- */
-    const config = {
-        minPunchSpeed: 8,      // Minimum velocity to register a hit
-        hitCooldown: 300,      // ms between hits
-        enemyAttackRate: 2000, // ms avg between attacks
-        audioRate: 1.1
+    /** * BILLION DOLLAR ENGINE ARCHITECTURE 
+     * 1. Core System (Init, Loop, State)
+     * 2. AI Vision (TensorFlow MoveNet)
+     * 3. 3D Renderer (Three.js with Robot rigging)
+     * 4. Game Logic (Physics, Hitboxes, AI Behavior)
+     */
+
+    // --- CONFIGURATION ---
+    const CONFIG = {
+        cameraWidth: 640,
+        cameraHeight: 480,
+        colors: {
+            robotBase: 0x222222,
+            robotJoints: 0x444444,
+            robotGlow: 0x00f3ff,
+            robotAngry: 0xff0000
+        }
     };
 
-    const state = {
-        mode: 'menu',
-        running: false,
-        player: { hp: 100, stamina: 100, score: 0, combo: 0 },
-        enemy: { hp: 100, state: 'IDLE', x: 0.5, y: 0.5, actionTimer: 0 },
-        skeleton: [],
-        lastFrameTime: 0,
-        history: { rightWrist: {x:0, y:0}, leftWrist: {x:0, y:0} }
+    let DIFFICULTY = {
+        'ROOKIE': { speed: 0.01, blockRate: 0.2, damage: 5, aggression: 0.005 },
+        'PRO':    { speed: 0.02, blockRate: 0.6, damage: 15, aggression: 0.02 },
+        'CHAMP':  { speed: 0.04, blockRate: 0.9, damage: 25, aggression: 0.04 }
     };
 
-    const els = {
-        video: document.getElementById('webcam'),
-        canvas: document.getElementById('game-canvas'),
-        ctx: document.getElementById('game-canvas').getContext('2d'),
-        hud: document.getElementById('hud-layer'),
-        menu: document.getElementById('menu-overlay'),
-        loader: document.getElementById('loader'),
-        log: document.getElementById('comms-log')
+    // --- GLOBAL STATE ---
+    let state = {
+        mode: 'MENU', // MENU, LOAD, COACH, FIGHT
+        isRunning: false,
+        difficulty: 'ROOKIE',
+        playerHp: 100,
+        enemyHp: 100,
+        lastPunchTime: 0,
+        combo: 0
     };
 
-    let detector;
-    let synth = window.speechSynthesis;
+    let assets = {
+        robot: null,
+        robotParts: {}
+    };
 
-    /* --- INITIALIZATION --- */
-    async function bootSystem(mode) {
-        state.mode = mode;
-        els.loader.style.display = 'block';
-        
-        try {
-            await initCamera();
-            detector = await poseDetection.createDetector(
-                poseDetection.SupportedModels.MoveNet,
-                { modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER }
-            );
-            
-            startGame();
-        } catch(e) {
-            alert("System Failure: Camera access denied or WebGL error.");
-        }
-    }
+    let ai = {
+        detector: null,
+        video: null,
+        stream: null
+    };
 
-    async function initCamera() {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
-            audio: false
-        });
-        els.video.srcObject = stream;
-        return new Promise(r => els.video.onloadedmetadata = r);
-    }
+    let gfx = {
+        scene: null,
+        camera: null,
+        renderer: null,
+        mixer: null
+    };
 
-    function startGame() {
-        els.menu.style.display = 'none';
-        els.hud.style.display = 'block';
-        els.canvas.width = els.video.videoWidth;
-        els.canvas.height = els.video.videoHeight;
-        
-        if(state.mode === 'fight') {
-            document.getElementById('enemy-ui').style.opacity = 1;
-            log("COMBAT SIMULATION ENGAGED");
-            speak("קרב התחיל. שמור פנים.");
-        } else {
-            log("TRAINING PROTOCOL ACTIVE");
-            speak("מצב אימון. אני בודק טכניקה.");
-        }
-
-        state.running = true;
-        requestAnimationFrame(gameLoop);
-    }
-
-    /* --- MAIN ENGINE LOOP --- */
-    async function gameLoop(timestamp) {
-        if(!state.running) return;
-
-        const deltaTime = timestamp - state.lastFrameTime;
-        state.lastFrameTime = timestamp;
-
-        const poses = await detector.estimatePoses(els.video);
-        
-        els.ctx.clearRect(0, 0, els.canvas.width, els.canvas.height);
-
-        if (poses.length > 0) {
-            const kp = poses[0].keypoints;
-            const p = mapKeypoints(kp);
-            
-            // Core Logic
-            analyzeBiomechanics(p, deltaTime);
-            
-            if(state.mode === 'fight') updateFightEngine(p, deltaTime);
-            else updateCoachEngine(p);
-
-            // Render Layers
-            drawAugmentedReality(p);
-        }
-
-        requestAnimationFrame(gameLoop);
-    }
-
-    /* --- BIOMECHANICS ENGINE --- */
-    function analyzeBiomechanics(p, dt) {
-        // Calculate Velocity (Pixels per ms)
-        const rwV = getVelocity(p.right_wrist, state.history.rightWrist, dt);
-        const lwV = getVelocity(p.left_wrist, state.history.leftWrist, dt);
-        
-        const velocity = Math.max(rwV, lwV) * 10; // Scale up for display
-        document.getElementById('velocity-val').innerText = Math.floor(velocity);
-
-        // Update History
-        state.history.rightWrist = { x: p.right_wrist.x, y: p.right_wrist.y };
-        state.history.leftWrist = { x: p.left_wrist.x, y: p.left_wrist.y };
-
-        return { velocity, rwV, lwV };
-    }
-
-    /* --- FIGHT ENGINE (The Smart Enemy) --- */
-    function updateFightEngine(p, dt) {
-        state.enemy.actionTimer += dt;
-
-        // 1. Enemy Movement (Circle the player)
-        const time = Date.now() * 0.001;
-        state.enemy.x = (els.canvas.width / 2) + Math.sin(time) * 100;
-        state.enemy.y = (els.canvas.height / 2) + Math.cos(time * 0.5) * 30;
-
-        // 2. Enemy AI State Machine
-        if(state.enemy.state === 'IDLE') {
-            if(state.enemy.actionTimer > config.enemyAttackRate) {
-                // Decide action based on player guard
-                const playerGuarding = isGuarding(p);
-                if(!playerGuarding && Math.random() > 0.3) {
-                    setEnemyState('ATTACK');
-                } else {
-                    setEnemyState('BLOCK'); // Taunt/Block
-                }
-            }
-        } 
-        else if(state.enemy.state === 'ATTACK') {
-            // Draw Warning
-            drawWarningLine(state.enemy.x, state.enemy.y, p.nose.x, p.nose.y);
-            
-            if(state.enemy.actionTimer > 500) { // Impact moment
-                if(!isGuarding(p)) {
-                    takeDamage(10);
-                } else {
-                    speak("חסימה!");
-                    log("ATTACK BLOCKED");
-                }
-                setEnemyState('IDLE');
-            }
-        }
-        else if(state.enemy.state === 'HIT') {
-            if(state.enemy.actionTimer > 400) setEnemyState('IDLE');
-        }
-
-        // 3. Player Attack Detection
-        detectPlayerHit(p);
-        
-        // Render Enemy
-        drawEnemy(state.enemy);
-    }
-
-    /* --- COACH ENGINE (Technique) --- */
-    function updateCoachEngine(p) {
-        // Guard Check
-        if(!isGuarding(p)) {
-            drawTarget(p.nose.x, p.nose.y, 'var(--neon-red)', 'PROTECT HEAD');
-            if(Math.random() > 0.98) speak("תרים ידיים!");
-        }
-
-        // Punch Form Check
-        const leftExt = p.left_wrist.x - p.left_shoulder.x; // Extension
-        if(leftExt > 100) { // Jab Detected
-             // Elbow check (Don't chicken wing)
-             if(Math.abs(p.left_elbow.y - p.left_shoulder.y) > 50) {
-                 log("ELBOW TOO LOW");
-             }
-        }
-        
-        // Squat/Duck Detection
-        if(p.nose.y > els.canvas.height * 0.6) {
-            log("GOOD DUCK");
-        }
-    }
-
-    /* --- COMBAT LOGIC --- */
-    function detectPlayerHit(p) {
-        const hitZone = 80;
-        const enemyHead = { x: state.enemy.x, y: state.enemy.y - 100 };
-        
-        // Check distance of wrists to enemy head
-        const distR = getDist(p.right_wrist, enemyHead);
-        const distL = getDist(p.left_wrist, enemyHead);
-
-        // Get velocity from UI for now (optimization)
-        const velocity = parseInt(document.getElementById('velocity-val').innerText);
-
-        if((distR < hitZone || distL < hitZone) && velocity > config.minPunchSpeed) {
-            if(state.enemy.state !== 'HIT' && state.enemy.state !== 'BLOCK') {
-                // HIT!
-                state.enemy.hp -= 5 + (velocity/5);
-                state.player.score += 100;
-                state.player.combo++;
-                setEnemyState('HIT');
-                
-                // Audio/Visual Feedback
-                speak(["בום", "יפה", "חזק", "פגיעה"][Math.floor(Math.random()*4)]);
-                createExplosion(enemyHead.x, enemyHead.y);
-                updateHUD();
-
-                if(state.enemy.hp <= 0) {
-                    speak("נוק אאוט! ניצחון מוחץ.");
-                    state.enemy.hp = 100;
-                    state.player.score += 1000;
-                }
-            } else if (state.enemy.state === 'BLOCK') {
-                log("ENEMY BLOCKED");
-                createSparks(enemyHead.x, enemyHead.y);
-            }
-        }
-    }
-
-    function takeDamage(amount) {
-        state.player.hp -= amount;
-        document.body.classList.add('damage-flash');
-        setTimeout(() => document.body.classList.remove('damage-flash'), 300);
-        speak("נפגעת!");
-        state.player.combo = 0;
-        updateHUD();
-        
-        if(state.player.hp <= 0) {
-            speak("הפסדת. קום על הרגליים.");
-            state.player.hp = 100;
-            state.enemy.hp = 100;
-        }
-    }
-
-    /* --- RENDERING (CANVAS) --- */
-    function drawEnemy(e) {
-        const ctx = els.ctx;
-        const cx = e.x;
-        const cy = e.y;
-
-        ctx.save();
-        
-        // Dynamic Color
-        let color = '#fff'; // Idle
-        if(e.state === 'ATTACK') color = '#ff003c';
-        if(e.state === 'BLOCK') color = '#00f3ff';
-        if(e.state === 'HIT') color = '#ffff00';
-
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 3;
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = color;
-
-        // Futuristic Hologram Body
-        // Head
-        ctx.beginPath(); 
-        ctx.arc(cx, cy - 100, 30, 0, Math.PI*2);
-        ctx.moveTo(cx - 30, cy - 110); ctx.lineTo(cx + 30, cy - 110); // Visor
-        ctx.stroke();
-
-        // Torso (Hexagon style)
-        ctx.beginPath();
-        ctx.moveTo(cx - 40, cy - 60); ctx.lineTo(cx + 40, cy - 60);
-        ctx.lineTo(cx + 20, cy + 80); ctx.lineTo(cx - 20, cy + 80);
-        ctx.lineTo(cx - 40, cy - 60);
-        ctx.stroke();
-
-        // Arms (Based on state)
-        if(e.state === 'BLOCK') {
-            ctx.strokeRect(cx - 50, cy - 120, 40, 80); // Left Guard
-            ctx.strokeRect(cx + 10, cy - 120, 40, 80); // Right Guard
-        } else if (e.state === 'ATTACK') {
-             // Punching Arm (Huge Perspective)
-             ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
-             ctx.beginPath(); ctx.arc(cx + 50, cy - 50, 80, 0, Math.PI*2); ctx.fill();
-        } else {
-             // Idle Arms
-             ctx.moveTo(cx - 40, cy - 60); ctx.lineTo(cx - 60, cy + 20);
-             ctx.moveTo(cx + 40, cy - 60); ctx.lineTo(cx + 60, cy + 20);
-             ctx.stroke();
-        }
-
-        // HP Ring
-        ctx.beginPath();
-        ctx.arc(cx, cy - 100, 45, 0, Math.PI * 2 * (e.hp/100));
-        ctx.strokeStyle = e.hp > 50 ? '#0f0' : '#f00';
-        ctx.stroke();
-
-        ctx.restore();
-    }
-
-    function drawAugmentedReality(p) {
-        const ctx = els.ctx;
-        
-        // Draw Skeleton overlay (Cybernetic Style)
-        ctx.strokeStyle = 'rgba(0, 243, 255, 0.4)';
-        ctx.lineWidth = 2;
-        
-        // Joints
-        const joints = ['left_shoulder', 'right_shoulder', 'left_elbow', 'right_elbow', 'left_wrist', 'right_wrist'];
-        joints.forEach(j => {
-            if(p[j].score > 0.5) {
-                ctx.beginPath();
-                ctx.arc(p[j].x, p[j].y, 5, 0, Math.PI*2);
-                ctx.fillStyle = '#fff';
-                ctx.fill();
-                // Data tag
-                ctx.font = '10px monospace';
-                ctx.fillStyle = 'cyan';
-                ctx.fillText(j.split('_')[1].toUpperCase(), p[j].x + 10, p[j].y);
-            }
-        });
-
-        // Skeleton Lines
-        const connections = [['left_shoulder','right_shoulder'], ['left_shoulder','left_elbow'], ['left_elbow','left_wrist'], ['right_shoulder','right_elbow'], ['right_elbow','right_wrist']];
-        connections.forEach(([s, e]) => {
-            if(p[s].score > 0.5 && p[e].score > 0.5) {
-                ctx.beginPath(); ctx.moveTo(p[s].x, p[s].y); ctx.lineTo(p[e].x, p[e].y); ctx.stroke();
-            }
-        });
-    }
-
-    function createExplosion(x, y) {
-        const ctx = els.ctx;
-        ctx.fillStyle = '#fff';
-        ctx.beginPath(); ctx.arc(x, y, 50, 0, Math.PI*2); ctx.fill();
-    }
-
-    function createSparks(x, y) {
-        // Simple visual for block
-        const ctx = els.ctx;
-        ctx.strokeStyle = 'cyan';
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(x-20, y-20); ctx.lineTo(x+20, y+20); ctx.stroke();
-        ctx.beginPath(); ctx.moveTo(x+20, y-20); ctx.lineTo(x-20, y+20); ctx.stroke();
-    }
-
-    function drawWarningLine(x1, y1, x2, y2) {
-        const ctx = els.ctx;
-        ctx.strokeStyle = 'rgba(255, 0, 0, 0.6)';
-        ctx.lineWidth = 5 + Math.random() * 5; // Flicker
-        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
-    }
-
-    function drawTarget(x, y, color, text) {
-        const ctx = els.ctx;
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 3;
-        ctx.strokeRect(x - 40, y - 40, 80, 80);
-        ctx.fillStyle = color;
-        ctx.font = "20px Orbitron";
-        ctx.fillText(text, x - 50, y - 50);
-    }
-
-    /* --- HELPERS --- */
-    function mapKeypoints(kp) {
-        const p = {};
-        kp.forEach(pt => p[pt.name] = pt);
-        return p;
-    }
-
-    function isGuarding(p) {
-        // Are wrists above shoulders and close to nose?
-        return (p.right_wrist.y < p.right_shoulder.y && p.left_wrist.y < p.left_shoulder.y);
-    }
-
-    function getVelocity(curr, prev, dt) {
-        if(dt === 0) return 0;
-        const dist = Math.sqrt(Math.pow(curr.x - prev.x, 2) + Math.pow(curr.y - prev.y, 2));
-        return dist / dt;
-    }
-
-    function getDist(p1, p2) {
-        return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
-    }
-
-    function setEnemyState(s) {
-        state.enemy.state = s;
-        state.enemy.actionTimer = 0;
-    }
-
-    function updateHUD() {
-        document.getElementById('p-hp').style.width = state.player.hp + '%';
-        document.getElementById('e-hp').style.width = state.enemy.hp + '%';
-        document.getElementById('score-val').innerText = state.player.score;
-        document.getElementById('combo-val').innerText = state.player.combo;
-    }
-
-    function log(msg) {
-        const el = document.createElement('div');
-        el.className = 'log-entry';
-        el.innerText = `> ${msg}`;
-        els.log.prepend(el);
-        if(els.log.children.length > 5) els.log.lastChild.remove();
-    }
-
-    function speak(txt) {
-        if(synth.speaking) return;
-        const u = new SpeechSynthesisUtterance(txt);
-        u.lang = 'he-IL';
-        u.rate = 1.2;
+    // --- AUDIO SYSTEM ---
+    const synth = window.speechSynthesis;
+    function speak(text, priority = false) {
+        if (synth.speaking && !priority) return;
+        if (priority) synth.cancel();
+        let u = new SpeechSynthesisUtterance(text);
+        u.rate = 1.1; u.pitch = 0.9;
         synth.speak(u);
     }
+
+    // --- INITIALIZATION ---
+    async function initEngine(modeType) {
+        state.mode = 'LOAD';
+        document.getElementById('main-menu').style.display = 'none';
+        document.getElementById('loading-overlay').style.display = 'flex';
+        
+        try {
+            // 1. Setup Camera
+            ai.video = document.getElementById('webcam');
+            ai.stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { width: CONFIG.cameraWidth, height: CONFIG.cameraHeight, facingMode: 'user' } 
+            });
+            ai.video.srcObject = ai.stream;
+            await new Promise(r => ai.video.onloadedmetadata = r);
+
+            // 2. Load Neural Network
+            if(!ai.detector) {
+                ai.detector = await poseDetection.createDetector(
+                    poseDetection.SupportedModels.MoveNet,
+                    { modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER }
+                );
+            }
+
+            // 3. Setup 3D World
+            if(!gfx.scene) initThreeJS();
+
+            // 4. Start Game
+            startGame(modeType);
+
+        } catch (e) {
+            alert("System Error: Camera access denied or hardware incompatible.");
+            console.error(e);
+            location.reload();
+        }
+    }
+
+    function selectDifficulty() {
+        let menu = document.getElementById('main-menu');
+        menu.innerHTML = `
+            <h1>SELECT LEVEL</h1>
+            <button class="menu-btn" onclick="setDiff('ROOKIE')">ROOKIE (Punching Bag)</button>
+            <button class="menu-btn" onclick="setDiff('PRO')">PRO (Sparring Partner)</button>
+            <button class="menu-btn btn-fight" onclick="setDiff('CHAMP')">CHAMPION (Killer AI)</button>
+            <button class="menu-btn" style="border:none; margin-top:30px;" onclick="location.reload()">BACK</button>
+        `;
+    }
+
+    function setDiff(level) {
+        state.difficulty = level;
+        initEngine('fight');
+    }
+
+    function startGame(modeType) {
+        state.mode = modeType.toUpperCase();
+        document.getElementById('loading-overlay').style.display = 'none';
+        document.getElementById('hud-layer').style.display = 'block';
+        document.getElementById('exit-btn').style.display = 'block';
+
+        // Reset State
+        state.playerHp = 100; 
+        state.enemyHp = 100;
+        resetRobot();
+
+        if(state.mode === 'FIGHT') {
+            document.getElementById('coach-feedback').style.display = 'none';
+            document.getElementById('p-bar-box').style.display = 'block';
+            document.getElementById('e-bar-box').style.display = 'block';
+            showMsg("ROUND 1", "white");
+            speak("Fight starts now. Keep your guard up.");
+        } else {
+            document.getElementById('coach-feedback').style.display = 'block';
+            document.getElementById('p-bar-box').style.display = 'none';
+            document.getElementById('e-bar-box').style.display = 'none';
+            speak("Training mode initialized. Show me your stance.");
+        }
+
+        state.isRunning = true;
+        animate();
+    }
+
+    // --- THREE.JS GRAPHICS ENGINE ---
+    function initThreeJS() {
+        const container = document.getElementById('render-layer');
+        
+        // Scene Setup
+        gfx.scene = new THREE.Scene();
+        gfx.scene.fog = new THREE.FogExp2(0x050505, 0.03);
+
+        gfx.camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
+        gfx.camera.position.set(0, 1.5, 3); // Eye level
+
+        gfx.renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        gfx.renderer.setSize(window.innerWidth, window.innerHeight);
+        gfx.renderer.shadowMap.enabled = true;
+        container.appendChild(gfx.renderer.domElement);
+
+        // Lighting (Cinematic)
+        const ambient = new THREE.AmbientLight(0x404040);
+        gfx.scene.add(ambient);
+
+        const keyLight = new THREE.SpotLight(0x00f3ff, 1.5);
+        keyLight.position.set(-2, 4, 3);
+        keyLight.castShadow = true;
+        gfx.scene.add(keyLight);
+
+        const rimLight = new THREE.PointLight(0xff00ff, 1);
+        rimLight.position.set(2, 2, -2);
+        gfx.scene.add(rimLight);
+
+        // --- BUILD THE ROBOT ---
+        buildRobot();
+        
+        // Floor Grid
+        const grid = new THREE.GridHelper(20, 20, 0x333333, 0x111111);
+        gfx.scene.add(grid);
+    }
+
+    function buildRobot() {
+        assets.robot = new THREE.Group();
+        
+        const mats = {
+            armor: new THREE.MeshStandardMaterial({ color: CONFIG.colors.robotBase, roughness: 0.3, metalness: 0.9 }),
+            joint: new THREE.MeshStandardMaterial({ color: CONFIG.colors.robotJoints, roughness: 0.7 }),
+            glow: new THREE.MeshBasicMaterial({ color: CONFIG.colors.robotGlow }),
+            eye: new THREE.MeshBasicMaterial({ color: CONFIG.colors.robotGlow }) // Mutable color
+        };
+
+        // Torso
+        const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.2, 0.7, 6), mats.armor);
+        torso.position.y = 1.3;
+        assets.robot.add(torso);
+
+        // Head Group
+        const headGroup = new THREE.Group();
+        headGroup.position.y = 1.8;
+        
+        const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.3, 0.3), mats.armor);
+        const visor = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.05, 0.25), mats.eye);
+        visor.position.set(0, 0, 0.05); // slightly forward
+        visor.name = "visor"; // For accessing later
+        
+        headGroup.add(headMesh);
+        headGroup.add(visor);
+        assets.robot.add(headGroup);
+        assets.robotParts.head = headGroup;
+
+        // Arms Generator
+        function createArm(side) {
+            const armGroup = new THREE.Group();
+            const xOffset = side === 'left' ? -0.5 : 0.5;
+            armGroup.position.set(xOffset, 1.55, 0); // Shoulder pos
+
+            // Shoulder
+            const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.12), mats.joint);
+            armGroup.add(shoulder);
+
+            // Upper Arm (Visual only)
+            const armGeo = new THREE.BoxGeometry(0.1, 0.4, 0.1);
+            const armMesh = new THREE.Mesh(armGeo, mats.armor);
+            armMesh.position.y = -0.25;
+            armGroup.add(armMesh);
+
+            // Forearm/Fist
+            const fistGeo = new THREE.BoxGeometry(0.15, 0.15, 0.2);
+            const fist = new THREE.Mesh(fistGeo, mats.armor);
+            fist.position.y = -0.55;
+            armGroup.add(fist);
+
+            return armGroup;
+        }
+
+        assets.robotParts.lArm = createArm('left');
+        assets.robotParts.rArm = createArm('right');
+        assets.robot.add(assets.robotParts.lArm);
+        assets.robot.add(assets.robotParts.rArm);
+
+        gfx.scene.add(assets.robot);
+    }
+
+    // --- GAME LOGIC LOOP ---
+    let enemyState = {
+        action: 'IDLE', // IDLE, BLOCK, WINDUP, ATTACK, HIT, DOWN
+        timer: 0,
+        targetPos: new THREE.Vector3()
+    };
+
+    async function animate() {
+        if(!state.isRunning) return;
+
+        // 1. AI Detection
+        const poses = await ai.detector.estimatePoses(ai.video);
+        
+        if (poses.length > 0) {
+            const kp = mapKeypoints(poses[0].keypoints);
+            
+            if (state.mode === 'COACH') updateCoach(kp);
+            if (state.mode === 'FIGHT') updateFight(kp);
+        }
+
+        // 2. Render Updates
+        updateRobotVisuals();
+        gfx.renderer.render(gfx.scene, gfx.camera);
+        
+        requestAnimationFrame(animate);
+    }
+
+    // --- FIGHT LOGIC (THE BRAIN) ---
+    function updateFight(kp) {
+        const diff = DIFFICULTY[state.difficulty];
+        
+        // --- 1. PLAYER ATTACKS ---
+        // Detect punch: Wrist velocity high + distance from shoulder extended
+        const isPunching = detectPunch(kp);
+        
+        if (isPunching && enemyState.action !== 'BLOCK' && enemyState.action !== 'HIT') {
+            // Does robot block?
+            if (Math.random() < diff.blockRate) {
+                // ROBOT BLOCKS
+                enemyState.action = 'BLOCK';
+                enemyState.timer = 20;
+                playSound('block');
+            } else {
+                // ROBOT GETS HIT
+                enemyState.action = 'HIT';
+                enemyState.timer = 15;
+                state.enemyHp -= 5; // Damage
+                updateBars();
+                triggerImpactEffect();
+                
+                if(state.enemyHp <= 0) gameOver(true);
+            }
+        }
+
+        // --- 2. ROBOT AI ---
+        enemyState.timer--;
+
+        if (enemyState.action === 'IDLE') {
+            // Chance to attack
+            if (enemyState.timer <= 0 && Math.random() < diff.aggression) {
+                enemyState.action = 'WINDUP'; // Prepare attack
+                enemyState.timer = 20; // Telegraph time
+                changeEyeColor(CONFIG.colors.robotAngry);
+            }
+        }
+        else if (enemyState.action === 'WINDUP') {
+            if (enemyState.timer <= 0) {
+                enemyState.action = 'ATTACK';
+                enemyState.timer = 10; // Attack speed
+                speak("Hey!", true);
+            }
+        }
+        else if (enemyState.action === 'ATTACK') {
+            // Check if player is guarding
+            if (enemyState.timer === 5) { // Impact frame
+                const playerGuarding = checkGuard(kp);
+                if (!playerGuarding) {
+                    // Player Hit
+                    state.playerHp -= diff.damage;
+                    flashDamage();
+                    speak("Hit!");
+                    updateBars();
+                    if(state.playerHp <= 0) gameOver(false);
+                } else {
+                    speak("Blocked!");
+                }
+            }
+            if (enemyState.timer <= 0) {
+                enemyState.action = 'IDLE';
+                enemyState.timer = 30; // Cooldown
+                changeEyeColor(CONFIG.colors.robotGlow);
+            }
+        }
+        else if (enemyState.action === 'BLOCK' || enemyState.action === 'HIT') {
+            if (enemyState.timer <= 0) enemyState.action = 'IDLE';
+        }
+    }
+
+    // --- COACH LOGIC ---
+    let coachTimer = 0;
+    function updateCoach(kp) {
+        coachTimer++;
+        if(coachTimer < 30) return; // Update every half second
+        coachTimer = 0;
+
+        const uiMain = document.getElementById('coach-main');
+        const uiSub = document.getElementById('coach-sub');
+
+        // Logic: Hands Height
+        const handsY = (kp.left_wrist.y + kp.right_wrist.y) / 2;
+        const shoulderY = (kp.left_shoulder.y + kp.right_shoulder.y) / 2;
+        const noseY = kp.nose.y;
+
+        if (handsY > shoulderY) {
+            uiMain.innerText = "HANDS TOO LOW!";
+            uiMain.style.color = "var(--neon-danger)";
+            uiSub.innerText = "Get them to your chin level";
+            speak("Hands up");
+        } else if (Math.abs(kp.left_wrist.x - kp.right_wrist.x) < 50) {
+            uiMain.innerText = "TOO TIGHT";
+            uiSub.innerText = "Open your stance slightly";
+            uiMain.style.color = "yellow";
+        } else {
+            uiMain.innerText = "GOOD STANCE";
+            uiMain.style.color = "var(--neon-green)";
+            uiSub.innerText = "Keep moving, stay light";
+        }
+    }
+
+    // --- ANIMATION SYSTEM ---
+    function updateRobotVisuals() {
+        const time = Date.now() * 0.003;
+        const robot = assets.robot;
+        const rArm = assets.robotParts.rArm;
+        const lArm = assets.robotParts.lArm;
+
+        // Breathing (Always active)
+        robot.position.y = 1.3 + Math.sin(time) * 0.03;
+
+        // Look at player (Pseudo)
+        assets.robotParts.head.rotation.y = Math.sin(time * 0.5) * 0.1;
+
+        switch (enemyState.action) {
+            case 'IDLE':
+                // Guard Stance
+                lArm.rotation.set(-1.5, 0, -0.5); // Up and in
+                rArm.rotation.set(-1.5, 0, 0.5);
+                // Subtle movement
+                lArm.rotation.x += Math.sin(time)*0.05;
+                rArm.rotation.x += Math.cos(time)*0.05;
+                
+                // Return to center
+                robot.position.z = THREE.MathUtils.lerp(robot.position.z, 0, 0.1);
+                break;
+
+            case 'BLOCK':
+                // Cross arms
+                lArm.rotation.set(-1.8, 0.5, -1.0);
+                rArm.rotation.set(-1.8, -0.5, 1.0);
+                break;
+
+            case 'WINDUP':
+                // Pull back right arm
+                rArm.rotation.set(0.5, 0, 0.5); // Back
+                lArm.rotation.set(-1.5, 0, -0.5); // Keep guard
+                break;
+
+            case 'ATTACK':
+                // Thrust right arm
+                rArm.rotation.set(-1.6, 0, 0); // Punch forward
+                robot.position.z = THREE.MathUtils.lerp(robot.position.z, 1.5, 0.3); // Lunging
+                break;
+
+            case 'HIT':
+                // Head snaps back
+                assets.robotParts.head.rotation.x = -0.5;
+                robot.position.z = -0.5;
+                break;
+        }
+        
+        // Reset head rotation if not hit
+        if (enemyState.action !== 'HIT') {
+             assets.robotParts.head.rotation.x = THREE.MathUtils.lerp(assets.robotParts.head.rotation.x, 0, 0.1);
+        }
+    }
+
+    // --- UTILS & HELPERS ---
+    
+    // Physics detection
+    function detectPunch(kp) {
+        // Simple heuristic: Wrist moves far from shoulder and is fast
+        // In a real app, we would track velocity vectors over frames
+        const leftExt = kp.left_wrist.x > kp.left_shoulder.x + 80; // Mirror view
+        const rightExt = kp.right_wrist.x < kp.right_shoulder.x - 80;
+        
+        // Debounce punches
+        if ((leftExt || rightExt) && (Date.now() - state.lastPunchTime > 400)) {
+            state.lastPunchTime = Date.now();
+            return true;
+        }
+        return false;
+    }
+
+    function checkGuard(kp) {
+        // Are wrists above shoulders?
+        return (kp.left_wrist.y < kp.left_shoulder.y && kp.right_wrist.y < kp.right_shoulder.y);
+    }
+
+    function changeEyeColor(hex) {
+        const visor = assets.robot.getObjectByName("visor");
+        if(visor) visor.material.color.setHex(hex);
+    }
+
+    function flashDamage() {
+        const el = document.getElementById('dmg-effect');
+        el.style.opacity = 0.8;
+        setTimeout(() => el.style.opacity = 0, 200);
+    }
+
+    function showMsg(text, color) {
+        const el = document.getElementById('center-msg');
+        el.innerText = text;
+        el.style.color = color;
+        el.style.opacity = 1;
+        setTimeout(() => el.style.opacity = 0, 1500);
+    }
+
+    function updateBars() {
+        document.getElementById('p-hp').style.width = Math.max(0, state.playerHp) + "%";
+        document.getElementById('e-hp').style.width = Math.max(0, state.enemyHp) + "%";
+    }
+
+    function gameOver(playerWon) {
+        state.isRunning = false;
+        const msg = playerWon ? "K.O. YOU WIN!" : "YOU DIED";
+        showMsg(msg, playerWon ? "var(--neon-green)" : "var(--neon-danger)");
+        speak(msg);
+        setTimeout(() => {
+            alert(msg);
+            returnToMenu();
+        }, 2000);
+    }
+
+    function returnToMenu() {
+        state.isRunning = false;
+        document.getElementById('hud-layer').style.display = 'none';
+        document.getElementById('main-menu').style.display = 'flex';
+        document.getElementById('exit-btn').style.display = 'none';
+        document.getElementById('difficulty-select').style.display = 'none';
+    }
+
+    function playSound(type) {
+        // Placeholder for real SFX logic
+    }
+
+    function mapKeypoints(kp) {
+        const o = {};
+        kp.forEach(p => o[p.name] = p);
+        return o;
+    }
+
+    // Window Resize
+    window.addEventListener('resize', () => {
+        if(gfx.camera) {
+            gfx.camera.aspect = window.innerWidth / window.innerHeight;
+            gfx.camera.updateProjectionMatrix();
+            gfx.renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+    });
 
 </script>
 </body>
