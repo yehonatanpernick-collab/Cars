@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CYBER-FIGHT PRO: BILLION DOLLAR ENGINE</title>
+    <title>TITAN MMA: NEURAL COMBAT</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
@@ -12,684 +12,525 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Teko:wght@300;600&family=Roboto+Mono:wght@400;700&display=swap');
 
         :root {
-            --neon-cyan: #00f3ff;
-            --neon-magenta: #ff00ff;
-            --neon-danger: #ff2a2a;
-            --neon-green: #0aff0a;
-            --hud-bg: rgba(10, 15, 20, 0.85);
+            --primary: #00f3ff; /* Cyan */
+            --secondary: #ff0055; /* Magenta */
+            --warning: #ffcc00;
+            --bg: #050505;
+            --glass: rgba(10, 20, 30, 0.85);
         }
 
-        body { 
-            margin: 0; background-color: #050505; overflow: hidden; 
-            font-family: 'Rajdhani', sans-serif; color: white; user-select: none;
-        }
+        body { margin: 0; background: var(--bg); overflow: hidden; font-family: 'Teko', sans-serif; color: white; }
+        canvas { display: block; }
+        video { position: absolute; top: 0; left: 0; opacity: 0; pointer-events: none; }
 
-        /* --- LAYOUT & LAYERS --- */
-        #render-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+        /* HUD LAYOUT */
+        #hud { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+
+        /* HEALTH BARS */
+        .status-bar {
+            position: absolute; top: 30px; width: 40%; height: 40px;
+            background: rgba(0,0,0,0.8); border: 2px solid #333; transform: skewX(-20deg);
+        }
+        .fill { height: 100%; transition: width 0.2s; }
         
-        /* Video hidden, used for AI processing only */
-        video { 
-            position: absolute; bottom: 10px; right: 10px; width: 200px; 
-            transform: scaleX(-1); opacity: 0.3; z-index: 2; border: 1px solid var(--neon-cyan);
-            border-radius: 8px;
-        }
-
-        /* --- HUD (HEADS UP DISPLAY) --- */
-        #hud-layer { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; 
-            z-index: 10; pointer-events: none; display: none;
-        }
-
-        .bar-wrap {
-            position: absolute; top: 40px; width: 400px; height: 40px;
-            background: rgba(0,0,0,0.6); border: 2px solid #444;
-            transform: skewX(-20deg); overflow: hidden;
-        }
-        .hp-fill { height: 100%; transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        #p-bar { left: 20px; border-bottom: 4px solid var(--primary); }
+        #p-fill { background: linear-gradient(90deg, #0055ff, var(--primary)); width: 100%; }
         
-        #p-bar-box { left: 40px; border-bottom: 4px solid var(--neon-cyan); }
-        #p-hp { background: linear-gradient(90deg, #0055ff, var(--neon-cyan)); width: 100%; }
-        
-        #e-bar-box { right: 40px; border-bottom: 4px solid var(--neon-danger); }
-        #e-hp { background: linear-gradient(90deg, var(--neon-danger), #ff5500); width: 100%; float: right; }
+        #e-bar { right: 20px; border-bottom: 4px solid var(--secondary); }
+        #e-fill { background: linear-gradient(90deg, var(--secondary), #ff5500); width: 100%; float: right; }
 
-        .fighter-name {
-            position: absolute; top: 10px; font-family: 'Orbitron'; font-size: 1.5rem; letter-spacing: 2px;
+        .name-tag { position: absolute; top: -25px; font-size: 1.5rem; letter-spacing: 2px; }
+        #p-name { left: 0; color: var(--primary); }
+        #e-name { right: 0; color: var(--secondary); text-align: right; }
+
+        /* STAMINA BARS (New Feature) */
+        .stamina-bar {
+            position: absolute; top: 75px; width: 30%; height: 8px; background: #222; transform: skewX(-20deg);
         }
-        #p-name { left: 40px; color: var(--neon-cyan); }
-        #e-name { right: 40px; color: var(--neon-danger); text-align: right; }
+        #p-stam { left: 20px; background: #ffff00; width: 100%; }
+        #e-stam { right: 20px; background: #ffff00; width: 100%; float: right;}
 
-        /* --- CENTER NOTIFICATIONS --- */
-        #center-msg {
-            position: absolute; top: 30%; left: 50%; transform: translate(-50%, -50%);
-            font-family: 'Orbitron'; font-size: 5rem; font-weight: 900;
-            text-align: center; text-shadow: 0 0 20px rgba(255,255,255,0.5);
-            opacity: 0; transition: opacity 0.2s;
+        /* CENTER MESSAGE */
+        #msg-box {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; font-size: 5rem; font-weight: 900;
+            text-shadow: 0 0 30px var(--primary); opacity: 0; transition: opacity 0.2s;
         }
 
-        /* --- COACH PANEL --- */
-        #coach-feedback {
-            position: absolute; bottom: 50px; left: 50%; transform: translateX(-50%);
-            width: 600px; text-align: center;
-            background: linear-gradient(180deg, rgba(0,0,0,0), var(--hud-bg));
-            padding: 20px; border-radius: 10px; border-top: 2px solid var(--neon-green);
+        /* COACH FEEDBACK PANEL */
+        #coach-panel {
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+            width: 600px; padding: 15px;
+            background: linear-gradient(0deg, var(--glass), transparent);
+            border-bottom: 3px solid var(--primary);
+            text-align: center; font-family: 'Roboto Mono', monospace;
         }
-        .coach-txt { font-size: 2rem; font-weight: 700; text-transform: uppercase; }
+        #coach-text { font-size: 1.5rem; color: #fff; text-transform: uppercase; }
+        #coach-detail { font-size: 0.9rem; color: var(--primary); margin-top: 5px; }
 
-        /* --- MENUS --- */
-        #main-menu {
+        /* MENU */
+        #menu {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: radial-gradient(circle, #1a1a1a 0%, #000000 100%);
-            z-index: 100; display: flex; flex-direction: column; 
-            justify-content: center; align-items: center;
+            background: rgba(0,0,0,0.95); z-index: 100;
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
         }
+        .btn {
+            background: transparent; border: 2px solid #555; color: white;
+            padding: 15px 60px; font-size: 2rem; margin: 10px; cursor: pointer;
+            font-family: 'Teko', sans-serif; transition: 0.3s; width: 300px; text-align: center;
+        }
+        .btn:hover { border-color: var(--primary); background: rgba(0, 243, 255, 0.1); letter-spacing: 5px; }
+        .btn-fight:hover { border-color: var(--secondary); background: rgba(255, 0, 85, 0.1); }
 
-        h1 { 
-            font-family: 'Orbitron'; font-size: 6rem; margin: 0; 
-            background: -webkit-linear-gradient(var(--neon-cyan), var(--neon-magenta));
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-            text-shadow: 0 0 50px rgba(0, 243, 255, 0.4);
-        }
+        #loading { color: var(--primary); font-family: 'Roboto Mono'; margin-top: 20px; display: none; }
 
-        .menu-btn {
-            pointer-events: auto; background: transparent; 
-            border: 2px solid #555; color: white;
-            padding: 20px 80px; font-size: 1.5rem; margin: 15px;
-            font-family: 'Orbitron'; letter-spacing: 3px; cursor: pointer;
-            transition: 0.3s; position: relative; overflow: hidden;
-            width: 400px;
-        }
-        .menu-btn::before {
-            content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-            transition: 0.5s;
-        }
-        .menu-btn:hover { border-color: var(--neon-cyan); box-shadow: 0 0 20px var(--neon-cyan); }
-        .menu-btn:hover::before { left: 100%; }
-
-        .btn-fight:hover { border-color: var(--neon-danger); box-shadow: 0 0 20px var(--neon-danger); }
-
-        #loading-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #000; z-index: 200; display: none;
-            flex-direction: column; justify-content: center; align-items: center;
-        }
-        .loader {
-            border: 5px solid #333; border-top: 5px solid var(--neon-cyan);
-            border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-
-        /* DAMAGE EFFECT */
-        .damage-overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: radial-gradient(circle, transparent 50%, var(--neon-danger) 100%);
-            opacity: 0; pointer-events: none; z-index: 50; transition: opacity 0.1s;
-        }
-
-        /* BACK BUTTON */
-        #exit-btn {
-            position: absolute; top: 20px; right: 20px; z-index: 1000; pointer-events: auto;
-            background: #333; color: white; border: 1px solid #666; padding: 10px 20px;
-            cursor: pointer; display: none; font-family: 'Orbitron';
-        }
-        #exit-btn:hover { background: var(--neon-danger); border-color: white; }
+        /* HIT FLASH */
+        #flash { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: red; opacity: 0; pointer-events: none; z-index: 5; transition: opacity 0.1s; }
 
     </style>
 </head>
 <body>
 
-    <div id="main-menu">
-        <h1>CYBER FIGHT</h1>
-        <p style="color: #888; letter-spacing: 5px; margin-bottom: 50px;">NEURAL COMBAT SIMULATOR v9.0</p>
+    <div id="menu">
+        <h1 style="font-size: 6rem; margin: 0; color: var(--primary); text-shadow: 0 0 50px var(--primary);">TITAN MMA</h1>
+        <p style="font-family:'Roboto Mono'; letter-spacing:3px; color:#888;">AI POWERED COMBAT SYSTEM</p>
         
-        <button class="menu-btn" onclick="initEngine('coach')">SENSEI MODE (AI COACH)</button>
-        <button class="menu-btn btn-fight" onclick="selectDifficulty()">COMBAT ARENA</button>
-    </div>
-
-    <div id="difficulty-select" style="display:none;" class="menu-overlay">
+        <div id="btn-group">
+            <div class="btn" onclick="startSystem('COACH')">AI TRAINER (TECHNIQUE)</div>
+            <div class="btn btn-fight" onclick="startSystem('FIGHT')">FIGHT NIGHT (VS AI)</div>
         </div>
-
-    <div id="loading-overlay">
-        <div class="loader"></div>
-        <div style="margin-top:20px; color: var(--neon-cyan);">INITIALIZING NEURAL NETWORKS...</div>
+        <div id="loading">INITIALIZING NEURAL NETWORKS...</div>
     </div>
 
-    <div id="render-layer"></div>
-    <div class="damage-overlay" id="dmg-effect"></div>
     <video id="webcam" autoplay playsinline muted></video>
-    <button id="exit-btn" onclick="returnToMenu()">EXIT SIMULATION</button>
+    <div id="flash"></div>
+    <div id="hud">
+        <div id="p-bar">
+            <div class="name-tag" id="p-name">PLAYER</div>
+            <div id="p-fill" class="fill"></div>
+        </div>
+        <div id="p-stam" class="stamina-bar"></div>
 
-    <div id="hud-layer">
-        <div id="p-name">PLAYER 1</div>
-        <div id="p-bar-box" class="bar-wrap"><div id="p-hp" class="hp-fill"></div></div>
+        <div id="e-bar" style="display:none;">
+            <div class="name-tag" id="e-name">TITAN AI</div>
+            <div id="e-fill" class="fill"></div>
+        </div>
+        <div id="e-stam" class="stamina-bar" style="display:none;"></div>
 
-        <div id="e-name">CYBER-BOT X</div>
-        <div id="e-bar-box" class="bar-wrap"><div id="e-hp" class="hp-fill"></div></div>
+        <div id="msg-box">FIGHT!</div>
 
-        <div id="center-msg">FIGHT!</div>
-
-        <div id="coach-feedback" style="display:none;">
-            <div id="coach-main" class="coach-txt" style="color:var(--neon-cyan);">ANALYZING STANCE...</div>
-            <div id="coach-sub" style="color:#aaa; font-size: 1.2rem;">KEEP YOUR HANDS UP</div>
+        <div id="coach-panel">
+            <div id="coach-text">SYSTEM STANDBY</div>
+            <div id="coach-detail">WAITING FOR INPUT...</div>
         </div>
     </div>
+
+    <canvas id="c"></canvas>
 
 <script>
-    /** * BILLION DOLLAR ENGINE ARCHITECTURE 
-     * 1. Core System (Init, Loop, State)
-     * 2. AI Vision (TensorFlow MoveNet)
-     * 3. 3D Renderer (Three.js with Robot rigging)
-     * 4. Game Logic (Physics, Hitboxes, AI Behavior)
-     */
-
-    // --- CONFIGURATION ---
+    // --- GLOBAL SETTINGS ---
     const CONFIG = {
-        cameraWidth: 640,
-        cameraHeight: 480,
-        colors: {
-            robotBase: 0x222222,
-            robotJoints: 0x444444,
-            robotGlow: 0x00f3ff,
-            robotAngry: 0xff0000
-        }
+        minPunchVel: 12,    // Speed threshold for a "hit"
+        blockCooldown: 50,  // Frames between AI blocks
+        aiAggression: 0.02  // Chance per frame to attack
     };
 
-    let DIFFICULTY = {
-        'ROOKIE': { speed: 0.01, blockRate: 0.2, damage: 5, aggression: 0.005 },
-        'PRO':    { speed: 0.02, blockRate: 0.6, damage: 15, aggression: 0.02 },
-        'CHAMP':  { speed: 0.04, blockRate: 0.9, damage: 25, aggression: 0.04 }
-    };
-
-    // --- GLOBAL STATE ---
     let state = {
-        mode: 'MENU', // MENU, LOAD, COACH, FIGHT
-        isRunning: false,
-        difficulty: 'ROOKIE',
+        mode: 'MENU', // MENU, COACH, FIGHT
         playerHp: 100,
+        playerStamina: 100,
         enemyHp: 100,
-        lastPunchTime: 0,
-        combo: 0
+        enemyStamina: 100,
+        lastMoveTime: 0,
+        comboCount: 0
     };
 
-    let assets = {
-        robot: null,
-        robotParts: {}
-    };
-
-    let ai = {
-        detector: null,
-        video: null,
-        stream: null
-    };
-
-    let gfx = {
-        scene: null,
-        camera: null,
-        renderer: null,
-        mixer: null
-    };
-
-    // --- AUDIO SYSTEM ---
-    const synth = window.speechSynthesis;
-    function speak(text, priority = false) {
-        if (synth.speaking && !priority) return;
-        if (priority) synth.cancel();
-        let u = new SpeechSynthesisUtterance(text);
-        u.rate = 1.1; u.pitch = 0.9;
-        synth.speak(u);
-    }
+    // --- SYSTEM COMPONENTS ---
+    let detector, video;
+    let scene, camera, renderer, robot;
+    let tts = window.speechSynthesis; // Text to Speech
 
     // --- INITIALIZATION ---
-    async function initEngine(modeType) {
-        state.mode = 'LOAD';
-        document.getElementById('main-menu').style.display = 'none';
-        document.getElementById('loading-overlay').style.display = 'flex';
-        
+    async function startSystem(mode) {
+        state.mode = mode;
+        document.getElementById('btn-group').style.display = 'none';
+        document.getElementById('loading').style.display = 'block';
+
         try {
             // 1. Setup Camera
-            ai.video = document.getElementById('webcam');
-            ai.stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { width: CONFIG.cameraWidth, height: CONFIG.cameraHeight, facingMode: 'user' } 
-            });
-            ai.video.srcObject = ai.stream;
-            await new Promise(r => ai.video.onloadedmetadata = r);
+            video = document.getElementById('webcam');
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+            video.srcObject = stream;
+            await new Promise(r => video.onloadedmetadata = r);
 
-            // 2. Load Neural Network
-            if(!ai.detector) {
-                ai.detector = await poseDetection.createDetector(
-                    poseDetection.SupportedModels.MoveNet,
-                    { modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER }
-                );
+            // 2. Load AI Model
+            detector = await poseDetection.createDetector(
+                poseDetection.SupportedModels.MoveNet,
+                { modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER }
+            );
+
+            // 3. Setup 3D Scene
+            init3D();
+
+            // 4. Start Loops
+            document.getElementById('menu').style.display = 'none';
+            
+            if(mode === 'FIGHT') {
+                setupFightUI();
+                speak("Fight mode initiated. Protect yourself at all times.");
+            } else {
+                setupCoachUI();
+                speak("Trainer mode. Let's work on your form.");
             }
-
-            // 3. Setup 3D World
-            if(!gfx.scene) initThreeJS();
-
-            // 4. Start Game
-            startGame(modeType);
+            
+            loop();
 
         } catch (e) {
-            alert("System Error: Camera access denied or hardware incompatible.");
-            console.error(e);
+            alert("Camera Error: " + e.message);
             location.reload();
         }
     }
 
-    function selectDifficulty() {
-        let menu = document.getElementById('main-menu');
-        menu.innerHTML = `
-            <h1>SELECT LEVEL</h1>
-            <button class="menu-btn" onclick="setDiff('ROOKIE')">ROOKIE (Punching Bag)</button>
-            <button class="menu-btn" onclick="setDiff('PRO')">PRO (Sparring Partner)</button>
-            <button class="menu-btn btn-fight" onclick="setDiff('CHAMP')">CHAMPION (Killer AI)</button>
-            <button class="menu-btn" style="border:none; margin-top:30px;" onclick="location.reload()">BACK</button>
-        `;
+    function setupFightUI() {
+        document.getElementById('e-bar').style.display = 'block';
+        document.getElementById('e-stam').style.display = 'block';
     }
 
-    function setDiff(level) {
-        state.difficulty = level;
-        initEngine('fight');
+    function setupCoachUI() {
+        document.getElementById('e-bar').style.display = 'none';
+        document.getElementById('e-stam').style.display = 'none';
+        robot.visible = false; // Hide robot in coach mode
     }
 
-    function startGame(modeType) {
-        state.mode = modeType.toUpperCase();
-        document.getElementById('loading-overlay').style.display = 'none';
-        document.getElementById('hud-layer').style.display = 'block';
-        document.getElementById('exit-btn').style.display = 'block';
+    // --- THE "BRAIN" (LOGIC LOOP) ---
+    let lastPoses = [];
 
-        // Reset State
-        state.playerHp = 100; 
-        state.enemyHp = 100;
-        resetRobot();
-
-        if(state.mode === 'FIGHT') {
-            document.getElementById('coach-feedback').style.display = 'none';
-            document.getElementById('p-bar-box').style.display = 'block';
-            document.getElementById('e-bar-box').style.display = 'block';
-            showMsg("ROUND 1", "white");
-            speak("Fight starts now. Keep your guard up.");
-        } else {
-            document.getElementById('coach-feedback').style.display = 'block';
-            document.getElementById('p-bar-box').style.display = 'none';
-            document.getElementById('e-bar-box').style.display = 'none';
-            speak("Training mode initialized. Show me your stance.");
-        }
-
-        state.isRunning = true;
-        animate();
-    }
-
-    // --- THREE.JS GRAPHICS ENGINE ---
-    function initThreeJS() {
-        const container = document.getElementById('render-layer');
-        
-        // Scene Setup
-        gfx.scene = new THREE.Scene();
-        gfx.scene.fog = new THREE.FogExp2(0x050505, 0.03);
-
-        gfx.camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
-        gfx.camera.position.set(0, 1.5, 3); // Eye level
-
-        gfx.renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-        gfx.renderer.setSize(window.innerWidth, window.innerHeight);
-        gfx.renderer.shadowMap.enabled = true;
-        container.appendChild(gfx.renderer.domElement);
-
-        // Lighting (Cinematic)
-        const ambient = new THREE.AmbientLight(0x404040);
-        gfx.scene.add(ambient);
-
-        const keyLight = new THREE.SpotLight(0x00f3ff, 1.5);
-        keyLight.position.set(-2, 4, 3);
-        keyLight.castShadow = true;
-        gfx.scene.add(keyLight);
-
-        const rimLight = new THREE.PointLight(0xff00ff, 1);
-        rimLight.position.set(2, 2, -2);
-        gfx.scene.add(rimLight);
-
-        // --- BUILD THE ROBOT ---
-        buildRobot();
-        
-        // Floor Grid
-        const grid = new THREE.GridHelper(20, 20, 0x333333, 0x111111);
-        gfx.scene.add(grid);
-    }
-
-    function buildRobot() {
-        assets.robot = new THREE.Group();
-        
-        const mats = {
-            armor: new THREE.MeshStandardMaterial({ color: CONFIG.colors.robotBase, roughness: 0.3, metalness: 0.9 }),
-            joint: new THREE.MeshStandardMaterial({ color: CONFIG.colors.robotJoints, roughness: 0.7 }),
-            glow: new THREE.MeshBasicMaterial({ color: CONFIG.colors.robotGlow }),
-            eye: new THREE.MeshBasicMaterial({ color: CONFIG.colors.robotGlow }) // Mutable color
-        };
-
-        // Torso
-        const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.2, 0.7, 6), mats.armor);
-        torso.position.y = 1.3;
-        assets.robot.add(torso);
-
-        // Head Group
-        const headGroup = new THREE.Group();
-        headGroup.position.y = 1.8;
-        
-        const headMesh = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.3, 0.3), mats.armor);
-        const visor = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.05, 0.25), mats.eye);
-        visor.position.set(0, 0, 0.05); // slightly forward
-        visor.name = "visor"; // For accessing later
-        
-        headGroup.add(headMesh);
-        headGroup.add(visor);
-        assets.robot.add(headGroup);
-        assets.robotParts.head = headGroup;
-
-        // Arms Generator
-        function createArm(side) {
-            const armGroup = new THREE.Group();
-            const xOffset = side === 'left' ? -0.5 : 0.5;
-            armGroup.position.set(xOffset, 1.55, 0); // Shoulder pos
-
-            // Shoulder
-            const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.12), mats.joint);
-            armGroup.add(shoulder);
-
-            // Upper Arm (Visual only)
-            const armGeo = new THREE.BoxGeometry(0.1, 0.4, 0.1);
-            const armMesh = new THREE.Mesh(armGeo, mats.armor);
-            armMesh.position.y = -0.25;
-            armGroup.add(armMesh);
-
-            // Forearm/Fist
-            const fistGeo = new THREE.BoxGeometry(0.15, 0.15, 0.2);
-            const fist = new THREE.Mesh(fistGeo, mats.armor);
-            fist.position.y = -0.55;
-            armGroup.add(fist);
-
-            return armGroup;
-        }
-
-        assets.robotParts.lArm = createArm('left');
-        assets.robotParts.rArm = createArm('right');
-        assets.robot.add(assets.robotParts.lArm);
-        assets.robot.add(assets.robotParts.rArm);
-
-        gfx.scene.add(assets.robot);
-    }
-
-    // --- GAME LOGIC LOOP ---
-    let enemyState = {
-        action: 'IDLE', // IDLE, BLOCK, WINDUP, ATTACK, HIT, DOWN
-        timer: 0,
-        targetPos: new THREE.Vector3()
-    };
-
-    async function animate() {
-        if(!state.isRunning) return;
-
-        // 1. AI Detection
-        const poses = await ai.detector.estimatePoses(ai.video);
+    async function loop() {
+        // 1. Detect Pose
+        const poses = await detector.estimatePoses(video);
         
         if (poses.length > 0) {
-            const kp = mapKeypoints(poses[0].keypoints);
+            const kp = poses[0].keypoints;
+            const joints = mapJoints(kp);
             
-            if (state.mode === 'COACH') updateCoach(kp);
-            if (state.mode === 'FIGHT') updateFight(kp);
+            // Calculate Velocity
+            let velocity = 0;
+            if (lastPoses.length > 0) {
+                const prev = lastPoses[0];
+                velocity = Math.max(
+                    dist(joints.left_wrist, prev.left_wrist),
+                    dist(joints.right_wrist, prev.right_wrist)
+                );
+            }
+            lastPoses = [joints];
+
+            // 2. Route Logic
+            if (state.mode === 'COACH') processCoach(joints, velocity);
+            if (state.mode === 'FIGHT') processFight(joints, velocity);
         }
 
-        // 2. Render Updates
-        updateRobotVisuals();
-        gfx.renderer.render(gfx.scene, gfx.camera);
-        
-        requestAnimationFrame(animate);
+        // 3. Render
+        updateGameLoop(); // Regen Stamina, AI Logic
+        renderer.render(scene, camera);
+        requestAnimationFrame(loop);
     }
 
-    // --- FIGHT LOGIC (THE BRAIN) ---
-    function updateFight(kp) {
-        const diff = DIFFICULTY[state.difficulty];
+    // --- AI COACH INTELLIGENCE ---
+    let coachCooldown = 0;
+    
+    function processCoach(joints, velocity) {
+        coachCooldown--;
+        if (coachCooldown > 0) return;
+
+        const updateCoach = (main, sub, speakText) => {
+            document.getElementById('coach-text').innerText = main;
+            document.getElementById('coach-detail').innerText = sub;
+            if (speakText) speak(speakText);
+            coachCooldown = 60; // Wait 1 second before next advice
+        };
+
+        // 1. Check Hands (Guard)
+        const chinY = joints.nose.y + 50;
+        const handsLow = (joints.left_wrist.y > chinY && joints.right_wrist.y > chinY);
+
+        // 2. Check Extension (Punch)
+        const isPunching = velocity > 15;
         
-        // --- 1. PLAYER ATTACKS ---
-        // Detect punch: Wrist velocity high + distance from shoulder extended
-        const isPunching = detectPunch(kp);
-        
-        if (isPunching && enemyState.action !== 'BLOCK' && enemyState.action !== 'HIT') {
-            // Does robot block?
-            if (Math.random() < diff.blockRate) {
-                // ROBOT BLOCKS
-                enemyState.action = 'BLOCK';
-                enemyState.timer = 20;
-                playSound('block');
+        if (isPunching) {
+            // Did they extend?
+            const armLen = dist(joints.left_shoulder, joints.left_wrist);
+            if (armLen < 80) { // Normalized pixel distance
+                updateCoach("EXTEND YOUR ARM!", "Short punches have no power.", "Extend fully");
             } else {
-                // ROBOT GETS HIT
-                enemyState.action = 'HIT';
-                enemyState.timer = 15;
-                state.enemyHp -= 5; // Damage
-                updateBars();
-                triggerImpactEffect();
+                updateCoach("GOOD SNAP!", "Velocity: " + Math.round(velocity), "Nice hit");
+            }
+        } else if (handsLow) {
+            updateCoach("HANDS UP!", "Protect your chin.", "Hands up");
+        } else {
+            // Check Head Movement
+            if (Math.abs(joints.nose.x - joints.left_hip.x) > 60) {
+                updateCoach("SLIPPING", "Good head movement.", "");
+            } else {
+                updateCoach("STANCE OK", "Ready for input...", "");
+            }
+        }
+    }
+
+    // --- AI FIGHT INTELLIGENCE ---
+    let aiState = {
+        action: 'IDLE', // IDLE, BLOCK, ATTACK, HIT, RECOVER
+        timer: 0,
+        stun: 0
+    };
+
+    function processFight(joints, velocity) {
+        const isPunching = velocity > CONFIG.minPunchVel;
+        const isBlocking = (joints.left_wrist.y < joints.nose.y && joints.right_wrist.y < joints.nose.y);
+
+        // --- PLAYER OFFENSE ---
+        if (isPunching && state.playerStamina > 10) {
+            // Determine if AI blocks
+            // Smart AI: If AI has stamina and is not stunned, it blocks 60% of time
+            let blockChance = (aiState.stun > 0) ? 0.1 : 0.6;
+            
+            if (aiState.action !== 'BLOCK' && Math.random() < blockChance) {
+                // AI Blocked
+                aiState.action = 'BLOCK';
+                aiState.timer = 20;
+                playSound('block');
+                showMsg("BLOCKED", "yellow");
+            } else if (aiState.action !== 'BLOCK') {
+                // AI Hit
+                state.enemyHp -= 5;
+                state.playerStamina -= 10;
+                aiState.action = 'HIT';
+                aiState.timer = 15;
+                aiState.stun += 10;
                 
-                if(state.enemyHp <= 0) gameOver(true);
+                // Visuals
+                updateBars();
+                robot.getObjectByName("Head").material.color.setHex(0xff0000);
+                playSound('hit');
+                
+                if (state.enemyHp <= 0) gameOver(true);
             }
         }
 
-        // --- 2. ROBOT AI ---
-        enemyState.timer--;
+        // --- PLAYER DEFENSE CHECK (During AI Attack) ---
+        if (aiState.action === 'ATTACK' && aiState.timer === 10) { // Impact frame
+            if (isBlocking) {
+                speak("Nice block");
+                state.playerStamina -= 5; // Blocking costs stamina
+            } else {
+                // Player takes damage
+                state.playerHp -= 10;
+                damageEffect();
+                speak("You got hit");
+                if (state.playerHp <= 0) gameOver(false);
+            }
+            updateBars();
+        }
+    }
 
-        if (enemyState.action === 'IDLE') {
-            // Chance to attack
-            if (enemyState.timer <= 0 && Math.random() < diff.aggression) {
-                enemyState.action = 'WINDUP'; // Prepare attack
-                enemyState.timer = 20; // Telegraph time
-                changeEyeColor(CONFIG.colors.robotAngry);
-            }
+    function updateGameLoop() {
+        if(state.mode !== 'FIGHT') return;
+
+        // Stamina Regen
+        state.playerStamina = Math.min(100, state.playerStamina + 0.2);
+        state.enemyStamina = Math.min(100, state.enemyStamina + 0.3);
+        
+        // Update Stamina UI
+        document.getElementById('p-stam').style.width = state.playerStamina + '%';
+        document.getElementById('e-stam').style.width = state.enemyStamina + '%';
+
+        // AI LOGIC MACHINE
+        aiState.timer--;
+        aiState.stun = Math.max(0, aiState.stun - 0.5);
+
+        // Reset Colors
+        if (aiState.action !== 'HIT') {
+             robot.getObjectByName("Head").material.color.setHex(0x222222);
         }
-        else if (enemyState.action === 'WINDUP') {
-            if (enemyState.timer <= 0) {
-                enemyState.action = 'ATTACK';
-                enemyState.timer = 10; // Attack speed
-                speak("Hey!", true);
-            }
-        }
-        else if (enemyState.action === 'ATTACK') {
-            // Check if player is guarding
-            if (enemyState.timer === 5) { // Impact frame
-                const playerGuarding = checkGuard(kp);
-                if (!playerGuarding) {
-                    // Player Hit
-                    state.playerHp -= diff.damage;
-                    flashDamage();
-                    speak("Hit!");
-                    updateBars();
-                    if(state.playerHp <= 0) gameOver(false);
-                } else {
-                    speak("Blocked!");
+
+        if (aiState.action === 'IDLE') {
+            // Decide Next Move
+            if (aiState.stun > 20) {
+                // AI is dizzy, back off
+                robot.position.z = -1; 
+            } else {
+                robot.position.z = THREE.MathUtils.lerp(robot.position.z, 0, 0.05); // Approach
+                
+                // Attack logic
+                if (state.enemyStamina > 30 && Math.random() < CONFIG.aiAggression) {
+                    aiState.action = 'WINDUP';
+                    aiState.timer = 30; // Telegraphing time
+                    state.enemyStamina -= 20;
+                    robot.getObjectByName("Eyes").material.color.setHex(0xff0055); // Red Eyes
                 }
             }
-            if (enemyState.timer <= 0) {
-                enemyState.action = 'IDLE';
-                enemyState.timer = 30; // Cooldown
-                changeEyeColor(CONFIG.colors.robotGlow);
+        }
+        else if (aiState.action === 'WINDUP') {
+            // Visual cue: Pull arm back
+            robot.getObjectByName("RArm").rotation.x = -0.5;
+            if (aiState.timer <= 0) {
+                aiState.action = 'ATTACK';
+                aiState.timer = 20;
             }
         }
-        else if (enemyState.action === 'BLOCK' || enemyState.action === 'HIT') {
-            if (enemyState.timer <= 0) enemyState.action = 'IDLE';
+        else if (aiState.action === 'ATTACK') {
+            // Punch forward
+            robot.getObjectByName("RArm").rotation.x = -1.8;
+            robot.position.z = 1.5; // Lunge
+            if (aiState.timer <= 0) {
+                aiState.action = 'IDLE';
+                aiState.timer = 20; // Cooldown
+                robot.getObjectByName("Eyes").material.color.setHex(0x00f3ff); // Blue Eyes
+            }
         }
+        else if (aiState.action === 'BLOCK') {
+            // Guard up
+            robot.getObjectByName("LArm").rotation.x = -2;
+            robot.getObjectByName("RArm").rotation.x = -2;
+            if (aiState.timer <= 0) aiState.action = 'IDLE';
+        }
+        else if (aiState.action === 'HIT') {
+            robot.rotation.x = -0.2; // Knockback
+            if (aiState.timer <= 0) {
+                aiState.action = 'IDLE';
+                robot.rotation.x = 0;
+            }
+        }
+
+        animateRobot();
     }
 
-    // --- COACH LOGIC ---
-    let coachTimer = 0;
-    function updateCoach(kp) {
-        coachTimer++;
-        if(coachTimer < 30) return; // Update every half second
-        coachTimer = 0;
+    // --- 3D ENGINE (THREE.JS) ---
+    function init3D() {
+        const canvas = document.getElementById('c');
+        renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
 
-        const uiMain = document.getElementById('coach-main');
-        const uiSub = document.getElementById('coach-sub');
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 1.4, 3.5);
 
-        // Logic: Hands Height
-        const handsY = (kp.left_wrist.y + kp.right_wrist.y) / 2;
-        const shoulderY = (kp.left_shoulder.y + kp.right_shoulder.y) / 2;
-        const noseY = kp.nose.y;
+        // Lights
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(2, 5, 5);
+        scene.add(light);
+        const ambient = new THREE.AmbientLight(0x404040, 2);
+        scene.add(ambient);
 
-        if (handsY > shoulderY) {
-            uiMain.innerText = "HANDS TOO LOW!";
-            uiMain.style.color = "var(--neon-danger)";
-            uiSub.innerText = "Get them to your chin level";
-            speak("Hands up");
-        } else if (Math.abs(kp.left_wrist.x - kp.right_wrist.x) < 50) {
-            uiMain.innerText = "TOO TIGHT";
-            uiSub.innerText = "Open your stance slightly";
-            uiMain.style.color = "yellow";
-        } else {
-            uiMain.innerText = "GOOD STANCE";
-            uiMain.style.color = "var(--neon-green)";
-            uiSub.innerText = "Keep moving, stay light";
-        }
+        // Create Robot (Procedural)
+        createTitanRobot();
     }
 
-    // --- ANIMATION SYSTEM ---
-    function updateRobotVisuals() {
-        const time = Date.now() * 0.003;
-        const robot = assets.robot;
-        const rArm = assets.robotParts.rArm;
-        const lArm = assets.robotParts.lArm;
+    function createTitanRobot() {
+        robot = new THREE.Group();
 
-        // Breathing (Always active)
-        robot.position.y = 1.3 + Math.sin(time) * 0.03;
+        const armorMat = new THREE.MeshPhongMaterial({ color: 0x222222, specular: 0x111111, shininess: 100 });
+        const jointMat = new THREE.MeshBasicMaterial({ color: 0x555555, wireframe: true });
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0x00f3ff });
 
-        // Look at player (Pseudo)
-        assets.robotParts.head.rotation.y = Math.sin(time * 0.5) * 0.1;
+        // Head
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.3, 0.3), armorMat);
+        head.position.y = 1.75;
+        head.name = "Head";
+        robot.add(head);
 
-        switch (enemyState.action) {
-            case 'IDLE':
-                // Guard Stance
-                lArm.rotation.set(-1.5, 0, -0.5); // Up and in
-                rArm.rotation.set(-1.5, 0, 0.5);
-                // Subtle movement
-                lArm.rotation.x += Math.sin(time)*0.05;
-                rArm.rotation.x += Math.cos(time)*0.05;
-                
-                // Return to center
-                robot.position.z = THREE.MathUtils.lerp(robot.position.z, 0, 0.1);
-                break;
+        // Eyes
+        const eyes = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.05, 0.2), eyeMat);
+        eyes.position.set(0, 1.75, 0.1);
+        eyes.name = "Eyes";
+        robot.add(eyes);
 
-            case 'BLOCK':
-                // Cross arms
-                lArm.rotation.set(-1.8, 0.5, -1.0);
-                rArm.rotation.set(-1.8, -0.5, 1.0);
-                break;
+        // Torso
+        const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.2, 0.6, 8), armorMat);
+        torso.position.y = 1.2;
+        robot.add(torso);
 
-            case 'WINDUP':
-                // Pull back right arm
-                rArm.rotation.set(0.5, 0, 0.5); // Back
-                lArm.rotation.set(-1.5, 0, -0.5); // Keep guard
-                break;
+        // Arms
+        const createArm = (x, name) => {
+            const g = new THREE.Group();
+            g.position.set(x, 1.5, 0);
+            const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.12), jointMat);
+            const arm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.1), armorMat);
+            arm.position.y = -0.3;
+            const fist = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.15), armorMat);
+            fist.position.y = -0.6;
+            g.add(shoulder); g.add(arm); g.add(fist);
+            g.name = name;
+            return g;
+        };
 
-            case 'ATTACK':
-                // Thrust right arm
-                rArm.rotation.set(-1.6, 0, 0); // Punch forward
-                robot.position.z = THREE.MathUtils.lerp(robot.position.z, 1.5, 0.3); // Lunging
-                break;
+        robot.add(createArm(-0.5, "LArm"));
+        robot.add(createArm(0.5, "RArm"));
 
-            case 'HIT':
-                // Head snaps back
-                assets.robotParts.head.rotation.x = -0.5;
-                robot.position.z = -0.5;
-                break;
-        }
+        scene.add(robot);
+    }
+
+    function animateRobot() {
+        const time = Date.now() * 0.005;
+        // Breathing
+        robot.position.y = 0 + Math.sin(time) * 0.02;
         
-        // Reset head rotation if not hit
-        if (enemyState.action !== 'HIT') {
-             assets.robotParts.head.rotation.x = THREE.MathUtils.lerp(assets.robotParts.head.rotation.x, 0, 0.1);
+        if (aiState.action === 'IDLE') {
+            robot.getObjectByName("LArm").rotation.x = -1.5 + Math.sin(time)*0.1;
+            robot.getObjectByName("RArm").rotation.x = -1.5 + Math.cos(time)*0.1;
         }
     }
 
-    // --- UTILS & HELPERS ---
+    // --- UTILS ---
+    function dist(p1, p2) {
+        return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+    }
     
-    // Physics detection
-    function detectPunch(kp) {
-        // Simple heuristic: Wrist moves far from shoulder and is fast
-        // In a real app, we would track velocity vectors over frames
-        const leftExt = kp.left_wrist.x > kp.left_shoulder.x + 80; // Mirror view
-        const rightExt = kp.right_wrist.x < kp.right_shoulder.x - 80;
-        
-        // Debounce punches
-        if ((leftExt || rightExt) && (Date.now() - state.lastPunchTime > 400)) {
-            state.lastPunchTime = Date.now();
-            return true;
+    function mapJoints(kp) {
+        let o = {}; kp.forEach(p => o[p.name] = p); return o;
+    }
+
+    function speak(txt) {
+        if (!tts.speaking) {
+            let u = new SpeechSynthesisUtterance(txt);
+            u.rate = 1.2; u.pitch = 0.8; // Robotic voice
+            tts.speak(u);
         }
-        return false;
     }
 
-    function checkGuard(kp) {
-        // Are wrists above shoulders?
-        return (kp.left_wrist.y < kp.left_shoulder.y && kp.right_wrist.y < kp.right_shoulder.y);
+    function showMsg(txt, color) {
+        const el = document.getElementById('msg-box');
+        el.innerText = txt; el.style.color = color; el.style.opacity = 1;
+        setTimeout(() => el.style.opacity = 0, 1000);
     }
 
-    function changeEyeColor(hex) {
-        const visor = assets.robot.getObjectByName("visor");
-        if(visor) visor.material.color.setHex(hex);
-    }
-
-    function flashDamage() {
-        const el = document.getElementById('dmg-effect');
-        el.style.opacity = 0.8;
-        setTimeout(() => el.style.opacity = 0, 200);
-    }
-
-    function showMsg(text, color) {
-        const el = document.getElementById('center-msg');
-        el.innerText = text;
-        el.style.color = color;
-        el.style.opacity = 1;
-        setTimeout(() => el.style.opacity = 0, 1500);
+    function damageEffect() {
+        const el = document.getElementById('flash');
+        el.style.opacity = 0.6;
+        setTimeout(() => el.style.opacity = 0, 100);
     }
 
     function updateBars() {
-        document.getElementById('p-hp').style.width = Math.max(0, state.playerHp) + "%";
-        document.getElementById('e-hp').style.width = Math.max(0, state.enemyHp) + "%";
+        document.getElementById('p-fill').style.width = state.playerHp + '%';
+        document.getElementById('e-fill').style.width = state.enemyHp + '%';
     }
 
-    function gameOver(playerWon) {
-        state.isRunning = false;
-        const msg = playerWon ? "K.O. YOU WIN!" : "YOU DIED";
-        showMsg(msg, playerWon ? "var(--neon-green)" : "var(--neon-danger)");
-        speak(msg);
-        setTimeout(() => {
-            alert(msg);
-            returnToMenu();
-        }, 2000);
+    function gameOver(win) {
+        state.mode = 'MENU';
+        alert(win ? "KNOCKOUT! YOU WIN!" : "YOU WERE KNOCKED OUT!");
+        location.reload();
     }
-
-    function returnToMenu() {
-        state.isRunning = false;
-        document.getElementById('hud-layer').style.display = 'none';
-        document.getElementById('main-menu').style.display = 'flex';
-        document.getElementById('exit-btn').style.display = 'none';
-        document.getElementById('difficulty-select').style.display = 'none';
-    }
-
+    
     function playSound(type) {
-        // Placeholder for real SFX logic
+        // Sound placeholder
     }
 
-    function mapKeypoints(kp) {
-        const o = {};
-        kp.forEach(p => o[p.name] = p);
-        return o;
-    }
-
-    // Window Resize
     window.addEventListener('resize', () => {
-        if(gfx.camera) {
-            gfx.camera.aspect = window.innerWidth / window.innerHeight;
-            gfx.camera.updateProjectionMatrix();
-            gfx.renderer.setSize(window.innerWidth, window.innerHeight);
-        }
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
 </script>
