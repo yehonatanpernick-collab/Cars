@@ -1,541 +1,207 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="he">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TITAN MMA: NEURAL COMBAT</title>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MMA ULTRA AI</title>
 
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Teko:wght@300;600&family=Roboto+Mono:wght@400;700&display=swap');
+<!-- AI -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
 
-        :root {
-            --primary: #00f3ff; /* Cyan Neon */
-            --secondary: #ff0055; /* Magenta Neon */
-            --warning: #ffcc00; /* Stamina Yellow */
-            --bg: #050505;
-            --glass: rgba(10, 20, 30, 0.85);
-        }
+<!-- 3D -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 
-        body { margin: 0; background: var(--bg); overflow: hidden; font-family: 'Teko', sans-serif; color: white; user-select: none; }
-        canvas { display: block; position: absolute; top: 0; left: 0; z-index: 1; }
-        video { position: absolute; top: 0; left: 0; opacity: 0; pointer-events: none; z-index: 0; }
-
-        /* HUD LAYOUT */
-        #hud { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
-
-        /* HEALTH & STAMINA BARS */
-        .status-container {
-            position: absolute; top: 30px; width: 40%; 
-            transform: skewX(-20deg); pointer-events: auto;
-        }
-        .hp-bar { height: 30px; background: rgba(0,0,0,0.8); border: 2px solid #333; margin-bottom: 5px; position: relative; }
-        .stam-bar { height: 8px; background: #222; width: 100%; }
-        
-        .fill { height: 100%; transition: width 0.1s linear; }
-        .fill-stam { height: 100%; background: var(--warning); transition: width 0.1s linear; }
-
-        #p-stats { left: 20px; }
-        #p-hp-fill { background: linear-gradient(90deg, #0055ff, var(--primary)); width: 100%; }
-        #p-name { position: absolute; top: -25px; left: 0; font-size: 1.5rem; color: var(--primary); letter-spacing: 2px; }
-
-        #e-stats { right: 20px; }
-        #e-hp-fill { background: linear-gradient(90deg, var(--secondary), #ff5500); width: 100%; float: right; }
-        #e-stam-fill { float: right; }
-        #e-name { position: absolute; top: -25px; right: 0; font-size: 1.5rem; color: var(--secondary); letter-spacing: 2px; text-align: right; }
-
-        /* CENTER MESSAGE (KO / FIGHT) */
-        #msg-box {
-            position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
-            text-align: center; font-size: 6rem; font-weight: 900;
-            text-shadow: 0 0 30px var(--primary); opacity: 0; transition: opacity 0.2s;
-        }
-
-        /* COACH FEEDBACK PANEL */
-        #coach-panel {
-            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
-            width: 600px; padding: 20px;
-            background: linear-gradient(0deg, var(--glass), transparent);
-            border-bottom: 3px solid var(--primary);
-            text-align: center; font-family: 'Roboto Mono', monospace; display: none;
-        }
-        #coach-text { font-size: 2rem; color: #fff; text-transform: uppercase; font-weight: bold; }
-        #coach-detail { font-size: 1rem; color: var(--primary); margin-top: 5px; }
-
-        /* MAIN MENU */
-        #menu {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.95); z-index: 100;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-        }
-        h1 { font-size: 7rem; margin: 0; background: -webkit-linear-gradient(var(--primary), var(--secondary)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        
-        .btn {
-            background: transparent; border: 2px solid #555; color: white;
-            padding: 15px 60px; font-size: 2rem; margin: 15px; cursor: pointer;
-            font-family: 'Teko', sans-serif; transition: 0.3s; width: 350px; text-align: center;
-            position: relative; overflow: hidden;
-        }
-        .btn::before { content:''; position: absolute; top:0; left:-100%; width:100%; height:100%; background:rgba(255,255,255,0.1); transition:0.4s; }
-        .btn:hover { border-color: var(--primary); letter-spacing: 5px; box-shadow: 0 0 20px var(--primary); }
-        .btn:hover::before { left:100%; }
-        .btn-fight:hover { border-color: var(--secondary); box-shadow: 0 0 20px var(--secondary); }
-
-        #loading { color: var(--primary); font-family: 'Roboto Mono'; margin-top: 20px; display: none; }
-        
-        /* DAMAGE FLASH EFFECT */
-        #flash { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: red; opacity: 0; pointer-events: none; z-index: 5; transition: opacity 0.1s; }
-
-    </style>
+<style>
+body{
+  margin:0;
+  background:black;
+  color:white;
+  font-family:Arial;
+  text-align:center;
+}
+h1{margin:8px;}
+video,canvas{
+  width:92%;
+  max-width:420px;
+  border-radius:14px;
+}
+button{
+  padding:10px 16px;
+  margin:6px;
+  font-size:15px;
+  border:none;
+  border-radius:10px;
+  background:#ff0033;
+  color:white;
+}
+#feedback{font-size:20px;margin-top:6px;}
+#score{font-size:18px;margin-top:4px;}
+</style>
 </head>
+
 <body>
 
-    <div id="menu">
-        <h1>TITAN MMA</h1>
-        <p style="font-family:'Roboto Mono'; letter-spacing:3px; color:#888; margin-top:-20px; margin-bottom:50px;">AI POWERED COMBAT SYSTEM v10.0</p>
-        
-        <div id="btn-group">
-            <div class="btn" onclick="initSystem('COACH')">AI TRAINER (TECHNIQUE)</div>
-            <div class="btn btn-fight" onclick="initSystem('FIGHT')">FIGHT NIGHT (VS AI)</div>
-        </div>
-        <div id="loading">INITIALIZING NEURAL NETWORKS... <br> PLEASE WAIT AND ALLOW CAMERA ACCESS</div>
-    </div>
+<h1>🥊 MMA ULTRA AI</h1>
 
-    <video id="webcam" autoplay playsinline muted></video>
-    <div id="flash"></div>
-    
-    <div id="hud">
-        <div id="p-stats" class="status-container">
-            <div id="p-name">PLAYER 1</div>
-            <div class="hp-bar"><div id="p-hp-fill" class="fill"></div></div>
-            <div class="stam-bar"><div id="p-stam-fill" class="fill-stam"></div></div>
-        </div>
+<button onclick="setMode('coach')">מאמן חכם</button>
+<button onclick="setMode('fight')">קרב AI</button>
 
-        <div id="e-stats" class="status-container" style="display:none;">
-            <div id="e-name">TITAN AI</div>
-            <div class="hp-bar"><div id="e-hp-fill" class="fill"></div></div>
-            <div class="stam-bar"><div id="e-stam-fill" class="fill-stam"></div></div>
-        </div>
+<br>
 
-        <div id="msg-box">ROUND 1</div>
+<video id="video" autoplay playsinline></video>
+<canvas id="canvas"></canvas>
 
-        <div id="coach-panel">
-            <div id="coach-text">SYSTEM READY</div>
-            <div id="coach-detail">Assume boxing stance to begin</div>
-        </div>
-    </div>
-
-    <canvas id="c"></canvas>
+<div id="feedback">טוען מערכת...</div>
+<div id="score"></div>
 
 <script>
-    /**
-     * TITAN ENGINE CORE
-     * Integration of TensorFlow.js (Vision) and Three.js (Rendering)
-     * with MMA Logic State Machine.
-     */
+/* ---------- בסיס ---------- */
+const video = document.getElementById("video");
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+const feedback = document.getElementById("feedback");
+const scoreText = document.getElementById("score");
 
-    const CONFIG = {
-        minPunchVel: 12,     // Speed required to register a hit
-        blockCooldown: 50,   // AI reaction time
-        damage: 8,           // Damage per hit
-        staminaCost: 15,     // Cost per punch
-        staminaRegen: 0.3    // Stamina recovery per frame
-    };
+let detector;
+let mode="coach";
+let score=0;
+let combo=0;
 
-    // Global State
-    let state = {
-        mode: 'MENU', 
-        isRunning: false,
-        player: { hp: 100, stamina: 100, guard: false },
-        enemy: { hp: 100, stamina: 100, stun: 0 }
-    };
+/* ---------- מצלמה ---------- */
+async function setupCamera(){
+  const stream = await navigator.mediaDevices.getUserMedia({
+    video:{facingMode:"user"},
+    audio:false
+  });
+  video.srcObject = stream;
+  return new Promise(r => video.onloadedmetadata = r);
+}
 
-    let aiState = {
-        action: 'IDLE', // IDLE, WINDUP, ATTACK, BLOCK, HIT, DOWN
-        timer: 0
-    };
+/* ---------- 3D ---------- */
+let scene,camera3D,renderer,enemy;
 
-    // System Components
-    let detector, video, stream;
-    let scene, camera, renderer, robot, mixer;
-    let tts = window.speechSynthesis; 
+function init3D(){
+  scene = new THREE.Scene();
 
-    // --- INITIALIZATION ---
-    async function initSystem(mode) {
-        state.mode = mode;
-        document.getElementById('btn-group').style.display = 'none';
-        document.getElementById('loading').style.display = 'block';
+  camera3D = new THREE.PerspectiveCamera(70,1,0.1,100);
+  camera3D.position.z = 5;
 
-        try {
-            // 1. Camera Setup
-            video = document.getElementById('webcam');
-            stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { width: 640, height: 480, facingMode: 'user' } 
-            });
-            video.srcObject = stream;
-            await new Promise(r => video.onloadedmetadata = r);
+  renderer = new THREE.WebGLRenderer({alpha:true});
+  renderer.setSize(260,260);
+  document.body.appendChild(renderer.domElement);
 
-            // 2. Load MoveNet (Thunder Model for accuracy)
-            detector = await poseDetection.createDetector(
-                poseDetection.SupportedModels.MoveNet,
-                { modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER }
-            );
+  const geo = new THREE.CapsuleGeometry(0.5,1.2,4,8);
+  const mat = new THREE.MeshBasicMaterial({color:0xff0000});
+  enemy = new THREE.Mesh(geo,mat);
+  scene.add(enemy);
 
-            // 3. 3D Setup
-            initThreeJS();
+  animate3D();
+}
 
-            // 4. Start Game
-            document.getElementById('menu').style.display = 'none';
-            state.isRunning = true;
-            
-            if(mode === 'FIGHT') {
-                setupFightMode();
-            } else {
-                setupCoachMode();
-            }
+function animate3D(){
+  requestAnimationFrame(animate3D);
 
-            loop();
+  if(mode==="fight"){
+    enemy.position.x = Math.sin(Date.now()*0.003)*1.6;
+    enemy.rotation.y += 0.02;
+  }
 
-        } catch (e) {
-            alert("Error accessing camera. Please allow permissions and refresh.");
-            console.error(e);
-            location.reload();
-        }
+  renderer.render(scene,camera3D);
+}
+
+/* ---------- מצב ---------- */
+function setMode(m){
+  mode = m;
+  combo = 0;
+  feedback.innerText = "החלפת מצב...";
+}
+
+/* ---------- ניתוח תנועה ---------- */
+function analyze(k){
+
+  const rw = k.find(p=>p.name==="right_wrist");
+  const lw = k.find(p=>p.name==="left_wrist");
+  const rs = k.find(p=>p.name==="right_shoulder");
+  const ls = k.find(p=>p.name==="left_shoulder");
+  const ra = k.find(p=>p.name==="right_ankle");
+
+  if(!rw || !rs) return;
+
+  /* ===== מאמן ===== */
+  if(mode==="coach"){
+
+    const punch = Math.abs(rw.x - rs.x) > 120;
+    const guard = lw && lw.y < ls.y;
+    const kick = ra && ra.y < rs.y - 40;
+
+    if(kick){
+      feedback.innerText = "בעיטה גבוהה מצוינת! 🦵🔥";
+    }
+    else if(punch && guard){
+      combo++;
+      feedback.innerText = "קומבו טוב! רצף: " + combo + " 🥊";
+    }
+    else if(!guard){
+      combo = 0;
+      feedback.innerText = "שמור יד להגנה!";
+    }
+    else{
+      combo = 0;
+      feedback.innerText = "יישר את האגרוף.";
+    }
+  }
+
+  /* ===== קרב ===== */
+  if(mode==="fight" && enemy){
+
+    const hit = Math.abs((rw.x/100) - enemy.position.x) < 0.35
+             && rw.y < canvas.height * 0.55;
+
+    if(hit){
+      score++;
+      combo++;
+      feedback.innerText = "פגיעה! 💥 קומבו: " + combo;
+    }else{
+      combo = 0;
+      feedback.innerText = "המשך להילחם!";
     }
 
-    function setupFightMode() {
-        document.getElementById('e-stats').style.display = 'block';
-        showMsg("FIGHT!", "var(--primary)");
-        speak("Round one. Fight.");
+    scoreText.innerText = "ניקוד: " + score;
+  }
+}
+
+/* ---------- לולאת AI ---------- */
+async function run(){
+
+  await setupCamera();
+
+  detector = await poseDetection.createDetector(
+    poseDetection.SupportedModels.MoveNet
+  );
+
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+
+  init3D();
+
+  async function loop(){
+
+    const poses = await detector.estimatePoses(video);
+
+    ctx.drawImage(video,0,0);
+
+    if(poses.length > 0){
+      analyze(poses[0].keypoints);
     }
 
-    function setupCoachMode() {
-        document.getElementById('coach-panel').style.display = 'block';
-        robot.visible = false; // Hide opponent in coach mode
-        speak("Coach mode active. Show me your guard.");
-    }
+    requestAnimationFrame(loop);
+  }
 
-    // --- MAIN LOOP ---
-    let lastPoses = [];
+  loop();
+}
 
-    async function loop() {
-        if (!state.isRunning) return;
-
-        // 1. Vision Processing
-        const poses = await detector.estimatePoses(video);
-        
-        if (poses.length > 0) {
-            const kp = poses[0].keypoints;
-            const joints = mapJoints(kp);
-            
-            // Calculate Velocity (Frame Delta)
-            let velocity = 0;
-            if (lastPoses.length > 0) {
-                const prev = lastPoses[0];
-                velocity = Math.max(
-                    dist(joints.left_wrist, prev.left_wrist),
-                    dist(joints.right_wrist, prev.right_wrist)
-                );
-            }
-            lastPoses = [joints];
-
-            // 2. Logic Processing
-            if (state.mode === 'COACH') processCoach(joints, velocity);
-            if (state.mode === 'FIGHT') processFight(joints, velocity);
-        }
-
-        // 3. Game State Updates (Stamina, AI Animation)
-        updateGameLogic();
-        
-        // 4. Render
-        renderer.render(scene, camera);
-        requestAnimationFrame(loop);
-    }
-
-    // --- MMA LOGIC ENGINE ---
-
-    function processFight(joints, velocity) {
-        // Player Actions
-        const isPunching = velocity > CONFIG.minPunchVel;
-        const handsUp = (joints.left_wrist.y < joints.nose.y && joints.right_wrist.y < joints.nose.y);
-        state.player.guard = handsUp;
-
-        // Player Offense
-        if (isPunching && state.player.stamina > 10) {
-            // Check Hit
-            if (aiState.action !== 'BLOCK' && aiState.action !== 'DOWN') {
-                // AI Block Chance (Reduces if AI is stunned)
-                const blockChance = aiState.stun > 0 ? 0.1 : 0.6;
-                
-                if (Math.random() < blockChance) {
-                    aiState.action = 'BLOCK';
-                    aiState.timer = 20;
-                    playSound('block');
-                } else {
-                    // Successful Hit on AI
-                    state.enemy.hp -= CONFIG.damage;
-                    state.player.stamina -= CONFIG.staminaCost;
-                    aiState.action = 'HIT';
-                    aiState.timer = 15;
-                    aiState.stun += 15;
-                    
-                    robot.getObjectByName("Eyes").material.color.setHex(0xffffff); // Flash White
-                    playSound('hit');
-                    
-                    if (state.enemy.hp <= 0) gameOver(true);
-                }
-            }
-        }
-    }
-
-    function processCoach(joints, velocity) {
-        const chinY = joints.nose.y + 50;
-        const handsLow = (joints.left_wrist.y > chinY && joints.right_wrist.y > chinY);
-        const handsUp = (joints.left_wrist.y < joints.nose.y && joints.right_wrist.y < joints.nose.y);
-
-        if (velocity > 20) {
-            updateCoachUI("NICE SPEED", "Velocity: " + Math.round(velocity));
-        } else if (handsLow) {
-            updateCoachUI("HANDS UP!", "Protect your chin");
-            speak("Hands up", true);
-        } else if (handsUp) {
-            updateCoachUI("GOOD GUARD", "Keep elbows tight");
-        } else {
-            updateCoachUI("STANCE ACTIVE", "Move around");
-        }
-    }
-
-    function updateGameLogic() {
-        if (state.mode !== 'FIGHT') return;
-
-        // Stamina Regen
-        state.player.stamina = Math.min(100, state.player.stamina + CONFIG.staminaRegen);
-        state.enemy.stamina = Math.min(100, state.enemy.stamina + 0.2);
-
-        // Update UI Bars
-        document.getElementById('p-hp-fill').style.width = Math.max(0, state.player.hp) + '%';
-        document.getElementById('p-stam-fill').style.width = state.player.stamina + '%';
-        document.getElementById('e-hp-fill').style.width = Math.max(0, state.enemy.hp) + '%';
-        document.getElementById('e-stam-fill').style.width = state.enemy.stamina + '%';
-
-        // AI State Machine (The "Brain")
-        aiState.timer--;
-        aiState.stun = Math.max(0, aiState.stun - 0.2);
-
-        // Reset Visuals
-        if (aiState.action !== 'HIT') {
-             // Eyes color logic
-             const eyeColor = (aiState.action === 'ATTACK' || aiState.action === 'WINDUP') ? 0xff0055 : 0x00f3ff;
-             robot.getObjectByName("Eyes").material.color.setHex(eyeColor);
-        }
-
-        // Behavior Switch
-        if (aiState.action === 'IDLE') {
-            robot.position.z = THREE.MathUtils.lerp(robot.position.z, 0, 0.05); // Move to center
-            
-            // Should AI Attack?
-            if (aiState.stun < 10 && state.enemy.stamina > 30 && Math.random() < 0.02) {
-                aiState.action = 'WINDUP';
-                aiState.timer = 30; // Telegraphing (Warning time)
-                state.enemy.stamina -= 20;
-            }
-        }
-        else if (aiState.action === 'WINDUP') {
-            // Pull arm back
-            robot.getObjectByName("RArm").rotation.x = -0.5;
-            if (aiState.timer <= 0) {
-                aiState.action = 'ATTACK';
-                aiState.timer = 15;
-                speak("Hey!", true); // Sound warning
-            }
-        }
-        else if (aiState.action === 'ATTACK') {
-            // Punch
-            robot.getObjectByName("RArm").rotation.x = -2.0;
-            robot.position.z = 1.2; // Lunge forward
-            
-            // Check Damage Frame
-            if (aiState.timer === 8) {
-                if (!state.player.guard) {
-                    state.player.hp -= 10;
-                    damageFlash();
-                    speak("Hit!");
-                    if(state.player.hp <= 0) gameOver(false);
-                } else {
-                    speak("Blocked");
-                    state.player.stamina -= 5;
-                }
-            }
-
-            if (aiState.timer <= 0) {
-                aiState.action = 'IDLE';
-                aiState.timer = 30; // Recovery
-            }
-        }
-        else if (aiState.action === 'BLOCK') {
-            // Raise arms
-            robot.getObjectByName("LArm").rotation.x = -2;
-            robot.getObjectByName("RArm").rotation.x = -2;
-            if (aiState.timer <= 0) aiState.action = 'IDLE';
-        }
-        else if (aiState.action === 'HIT') {
-            robot.rotation.x = -0.3; // Knockback
-            if (aiState.timer <= 0) {
-                aiState.action = 'IDLE';
-                robot.rotation.x = 0;
-            }
-        }
-
-        animateIdle();
-    }
-
-    // --- 3D RENDERER (THREE.JS) ---
-    function initThreeJS() {
-        const canvas = document.getElementById('c');
-        renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        
-        scene = new THREE.Scene();
-        // Fog for depth
-        scene.fog = new THREE.FogExp2(0x050505, 0.02);
-
-        camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
-        camera.position.set(0, 1.4, 3.5);
-
-        // Lighting
-        const spot = new THREE.SpotLight(0x00f3ff, 2);
-        spot.position.set(-2, 4, 4);
-        scene.add(spot);
-        const rim = new THREE.SpotLight(0xff0055, 2);
-        rim.position.set(2, 4, -2);
-        scene.add(rim);
-        scene.add(new THREE.AmbientLight(0x404040));
-
-        // Create The Titan
-        createRobot();
-        
-        // Floor
-        const grid = new THREE.GridHelper(50, 50, 0x333333, 0x111111);
-        scene.add(grid);
-    }
-
-    function createRobot() {
-        robot = new THREE.Group();
-
-        const mats = {
-            armor: new THREE.MeshPhongMaterial({ color: 0x1a1a1a, shininess: 100 }),
-            joint: new THREE.MeshBasicMaterial({ color: 0x444444, wireframe: true }),
-            glow: new THREE.MeshBasicMaterial({ color: 0x00f3ff })
-        };
-
-        // Torso
-        const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.25, 0.7, 6), mats.armor);
-        torso.position.y = 1.2;
-        robot.add(torso);
-
-        // Head
-        const head = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.3, 0.3), mats.armor);
-        head.position.y = 1.7;
-        head.name = "Head";
-        robot.add(head);
-
-        // Eyes (The Visor)
-        const eyes = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.05, 0.2), mats.glow);
-        eyes.position.set(0, 1.7, 0.1);
-        eyes.name = "Eyes";
-        robot.add(eyes);
-
-        // Arms Generator
-        const createArm = (side) => {
-            const g = new THREE.Group();
-            const x = side === 'L' ? -0.55 : 0.55;
-            g.position.set(x, 1.5, 0);
-
-            const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.14), mats.joint);
-            const upper = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.4, 0.12), mats.armor);
-            upper.position.y = -0.25;
-            const fist = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.15), mats.armor);
-            fist.position.y = -0.55;
-
-            g.add(shoulder); g.add(upper); g.add(fist);
-            g.name = side + "Arm";
-            return g;
-        };
-
-        robot.add(createArm('L'));
-        robot.add(createArm('R'));
-
-        scene.add(robot);
-    }
-
-    function animateIdle() {
-        const t = Date.now() * 0.003;
-        robot.position.y = Math.sin(t) * 0.02; // Breathing
-        
-        if (aiState.action === 'IDLE') {
-            // Guard Position
-            robot.getObjectByName("LArm").rotation.x = -1.5 + Math.sin(t)*0.1;
-            robot.getObjectByName("LArm").rotation.z = -0.5;
-            robot.getObjectByName("RArm").rotation.x = -1.5 + Math.cos(t)*0.1;
-            robot.getObjectByName("RArm").rotation.z = 0.5;
-        }
-    }
-
-    // --- UTILS ---
-    function dist(p1, p2) { return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2)); }
-    function mapJoints(kp) { let o={}; kp.forEach(p=>o[p.name]=p); return o; }
-    
-    let lastSpoken = 0;
-    function speak(txt, force=false) {
-        if (!force && Date.now() - lastSpoken < 2000) return;
-        if (tts.speaking) return;
-        
-        let u = new SpeechSynthesisUtterance(txt);
-        u.rate = 1.2; 
-        u.pitch = 0.8; 
-        tts.speak(u);
-        lastSpoken = Date.now();
-    }
-
-    function updateCoachUI(main, sub) {
-        document.getElementById('coach-text').innerText = main;
-        document.getElementById('coach-detail').innerText = sub;
-    }
-
-    function showMsg(txt, col) {
-        const el = document.getElementById('msg-box');
-        el.innerText = txt; el.style.color = col; el.style.opacity = 1;
-        setTimeout(() => el.style.opacity = 0, 1500);
-    }
-
-    function damageFlash() {
-        const el = document.getElementById('flash');
-        el.style.opacity = 0.5;
-        setTimeout(() => el.style.opacity = 0, 100);
-    }
-
-    function gameOver(win) {
-        state.isRunning = false;
-        const msg = win ? "K.O. - YOU WIN!" : "YOU WERE KNOCKED OUT!";
-        showMsg(msg, win ? "var(--primary)" : "red");
-        speak(msg);
-        setTimeout(() => location.reload(), 4000);
-    }
-
-    function playSound(type) { /* SFX Placeholders */ }
-
-    // Resize Handle
-    window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-
+run();
 </script>
+
 </body>
 </html>
