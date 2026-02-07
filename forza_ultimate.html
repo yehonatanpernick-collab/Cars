@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HORIZON FESTIVAL: ULTRA</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,900;1,800&display=swap');
+        
+        body { margin: 0; overflow: hidden; background: #000; font-family: 'Montserrat', sans-serif; user-select: none; }
+        canvas { display: block; width: 100vw; height: 100vh; }
+
+        /* --- UI LAYER --- */
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none;
+            display: flex; flex-direction: column; justify-content: space-between;
+        }
+
+        /* SHOWROOM UI */
+        #showroom-ui {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.9));
+            display: flex; flex-direction: column; justify-content: flex-end; align-items: center;
+            padding-bottom: 50px; z-index: 10;
+            transition: opacity 0.8s ease-in-out;
+        }
+        
+        .car-title {
+            font-size: 5rem; color: #fff; text-transform: uppercase; letter-spacing: -2px;
+            text-shadow: 0 0 30px rgba(255, 0, 85, 0.6);
+            transform: skew(-10deg); margin: 0;
+            opacity: 0; animation: slideUp 0.5s forwards 0.2s;
+        }
+        
+        .car-stats {
+            display: flex; gap: 40px; margin-top: 10px;
+            opacity: 0; animation: slideUp 0.5s forwards 0.4s;
+        }
+        .stat-box { text-align: center; }
+        .stat-label { color: #888; font-size: 0.8rem; letter-spacing: 2px; }
+        .stat-value { color: #00ffcc; font-size: 2rem; font-weight: 800; }
+
+        .controls-hint {
+            margin-top: 40px; color: rgba(255,255,255,0.5); font-size: 1rem; letter-spacing: 5px;
+            animation: pulse 2s infinite;
+        }
+
+        /* IN-GAME HUD */
+        #game-hud {
+            position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 1s;
+        }
+        
+        .speedo-container {
+            position: absolute; bottom: 40px; right: 40px;
+            transform: skew(-10deg); text-align: right;
+        }
+        .speed-val { font-size: 7rem; line-height: 0.8; color: #fff; text-shadow: 0 0 20px rgba(255,255,255,0.4); }
+        .speed-label { font-size: 1.5rem; color: #ff0055; font-weight: 800; }
+        
+        .tachometer-bar {
+            width: 300px; height: 10px; background: rgba(255,255,255,0.1); margin-top: 10px;
+            position: relative; overflow: hidden;
+        }
+        .tacho-fill {
+            height: 100%; width: 0%; background: linear-gradient(90deg, #00ffcc, #ff0055);
+            transition: width 0.1s;
+        }
+
+        @keyframes slideUp { from { transform: translateY(50px) skew(-10deg); opacity: 0; } to { transform: translateY(0) skew(-10deg); opacity: 1; } }
+        @keyframes pulse { 50% { opacity: 0.3; } }
+
+    </style>
+</head>
+<body>
+
+    <div id="showroom-ui">
+        <h1 class="car-title" id="car-name">HORIZON APEX</h1>
+        <div class="car-stats">
+            <div class="stat-box"><div class="stat-label">HORSEPOWER</div><div class="stat-value" id="stat-hp">950</div></div>
+            <div class="stat-box"><div class="stat-label">0-100</div><div class="stat-value" id="stat-acc">2.1s</div></div>
+            <div class="stat-box"><div class="stat-label">TYPE</div><div class="stat-value" id="stat-type">HYPER</div></div>
+        </div>
+        <div class="controls-hint">◄ USE ARROWS TO BROWSE | ENTER TO DRIVE ►</div>
+    </div>
+
+    <div id="game-hud">
+        <div class="speedo-container">
+            <div class="speed-val" id="hud-speed">0</div>
+            <div class="speed-label">KM/H</div>
+            <div class="tachometer-bar"><div class="tacho-fill" id="hud-rpm"></div></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'https://cdn.skypack.dev/three@0.136.0';
+        import { EffectComposer } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/postprocessing/UnrealBloomPass.js';
+        import { ShaderPass } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/postprocessing/ShaderPass.js';
+        import { FXAAShader } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/shaders/FXAAShader.js';
+
+        // --- GAME STATE ---
+        const STATE = {
+            mode: 'showroom', // 'showroom' or 'drive'
+            currentCarIdx: 0,
+            cars: [],
+            cameraAngle: 0
+        };
+
+        const CAR_DATA = [
+            { name: "ZENITH HYPER", hp: "1200", acc: "1.9s", type: "HYPER", color: 0xff0044, physics: { maxSpeed: 4.5, accel: 0.02, grip: 0.98, type: 'car' } },
+            { name: "DUNE STALKER", hp: "650", acc: "3.5s", type: "RALLY", color: 0xffaa00, physics: { maxSpeed: 3.0, accel: 0.015, grip: 0.94, type: 'car' } },
+            { name: "HAYABUSA X", hp: "200", acc: "2.4s", type: "BIKE", color: 0x00ffcc, physics: { maxSpeed: 4.8, accel: 0.03, grip: 0.90, type: 'bike' } }
+        ];
+
+        // --- ENGINE SETUP ---
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 2000);
+        const renderer = new THREE.WebGLRenderer({ powerPreference: "high-performance", antialias: false, stencil: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+        renderer.toneMapping = THREE.ReinhardToneMapping;
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        // --- POST PROCESSING ---
+        const composer = new EffectComposer(renderer);
+        const renderPass = new RenderPass(scene, camera);
+        composer.addPass(renderPass);
+
+        const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloom.strength = 1.0; bloom.radius = 0.5; bloom.threshold = 0.6;
+        composer.addPass(bloom);
+
+        const fxaaPass = new ShaderPass(FXAAShader);
+        composer.addPass(fxaaPass);
+
+        // --- ENVIRONMENT (Dynamic Sky Shader) ---
+        const vertexShader = `
+            varying vec3 vWorldPosition;
+            void main() {
+                vec4 worldPosition = modelMatrix * vec4( position, 1.0 );
+                vWorldPosition = worldPosition.xyz;
+                gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+            }`;
+        const fragmentShader = `
+            uniform vec3 topColor;
+            uniform vec3 bottomColor;
+            uniform float offset;
+            uniform float exponent;
+            varying vec3 vWorldPosition;
+            void main() {
+                float h = normalize( vWorldPosition + offset ).y;
+                gl_FragColor = vec4( mix( bottomColor, topColor, max( pow( max( h , 0.0), exponent ), 0.0 ) ), 1.0 );
+            }`;
+
+        const skyGeo = new THREE.SphereGeometry(1000, 32, 15);
+        const skyMat = new THREE.ShaderMaterial({
+            uniforms: {
+                topColor: { value: new THREE.Color(0x0077ff) },
+                bottomColor: { value: new THREE.Color(0xff7700) }, // Sunset vibe
+                offset: { value: 33 },
+                exponent: { value: 0.6 }
+            },
+            vertexShader: vertexShader,
+            fragmentShader: fragmentShader,
+            side: THREE.BackSide
+        });
+        const sky = new THREE.Mesh(skyGeo, skyMat);
+        scene.add(sky);
+
+        // Lighting
+        const sun = new THREE.DirectionalLight(0xffeedd, 1.8);
+        sun.position.set(100, 50, -100);
+        sun.castShadow = true;
+        sun.shadow.mapSize.set(2048, 2048);
+        sun.shadow.camera.near = 0.5;
+        sun.shadow.camera.far = 500;
+        sun.shadow.camera.left = -50; sun.shadow.camera.right = 50;
+        sun.shadow.camera.top = 50; sun.shadow.camera.bottom = -50;
+        scene.add(sun);
+        scene.add(new THREE.AmbientLight(0x404040));
+
+        // --- PROCEDURAL GENERATION ---
+        
+        // 1. Terrain
+        const groundGeo = new THREE.PlaneGeometry(2000, 2000, 256, 256);
+        const pos = groundGeo.attributes.position;
+        for(let i=0; i<pos.count; i++){
+            const x = pos.getX(i);
+            const y = pos.getY(i);
+            let z = Math.sin(x*0.02)*Math.cos(y*0.02)*2; // Gentle hills
+            z += Math.random() * 0.2; // Noise
+            
+            // Flatten road area
+            if (Math.abs(x) < 30) z = 0; 
+            
+            pos.setZ(i, z);
+        }
+        groundGeo.computeVertexNormals();
+        const groundMat = new THREE.MeshStandardMaterial({ 
+            color: 0x111111, roughness: 0.6, metalness: 0.1,
+            onBeforeCompile: shader => {
+                shader.fragmentShader = shader.fragmentShader.replace(
+                    '#include <dithering_fragment>',
+                    `#include <dithering_fragment>
+                    // Asphalt line in center
+                    float road = 1.0 - smoothstep(20.0, 25.0, abs(vWorldPosition.x));
+                    vec3 roadColor = vec3(0.1, 0.1, 0.1);
+                    gl_FragColor = vec4(mix(gl_FragColor.rgb, roadColor, road), gl_FragColor.a);
+                    `
+                );
+                shader.vertexShader = `varying vec3 vWorldPosition; ${shader.vertexShader}`.replace(
+                    '#include <worldpos_vertex>',
+                    `#include <worldpos_vertex> vWorldPosition = (modelMatrix * vec4(transformed, 1.0)).xyz;`
+                );
+            }
+        });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI/2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // 2. Decor (Neon Arches)
+        for(let i=0; i<20; i++) {
+            const arch = new THREE.Mesh(new THREE.TorusGeometry(30, 1, 16, 100, Math.PI), 
+                new THREE.MeshBasicMaterial({color: 0x00ffcc}));
+            arch.position.set(0, 0, -i*100);
+            arch.scale.set(1, 0.5, 1);
+            scene.add(arch);
+        }
+
+        // --- CAR BUILDER (COMPLEX) ---
+        function createVehicle(type, color) {
+            const container = new THREE.Group();
+            
+            // High Quality Paint Material
+            const paint = new THREE.MeshPhysicalMaterial({
+                color: color, metalness: 0.7, roughness: 0.2,
+                clearcoat: 1.0, clearcoatRoughness: 0.05,
+                sheen: 0.5
+            });
+            const carbon = new THREE.MeshStandardMaterial({color:0x111111, roughness:0.5});
+            const glass = new THREE.MeshPhysicalMaterial({color:0x000000, transmission:0.2, roughness:0});
+
+            if(type === 'HYPER' || type === 'RALLY') {
+                // Procedural Chassis
+                const shape = new THREE.Shape();
+                if(type === 'HYPER') {
+                    // Aerodynamic Profile
+                    shape.moveTo(0,0); shape.lineTo(2.2,0); shape.lineTo(2.3,0.3); shape.lineTo(2.0,0.6);
+                    shape.lineTo(0.8,0.9); shape.lineTo(-1.0,0.9); shape.lineTo(-2.2,0.7); shape.lineTo(-2.3,0);
+                } else {
+                    // Boxy Rally Profile
+                    shape.moveTo(0,0); shape.lineTo(2.0,0); shape.lineTo(2.0,0.6); shape.lineTo(1.2,1.1);
+                    shape.lineTo(-1.0,1.1); shape.lineTo(-1.8,0.6); shape.lineTo(-2.0,0);
+                }
+                
+                const extrudeSet = { steps: 1, depth: 1.8, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05, bevelSegments: 3 };
+                const chassisGeo = new THREE.ExtrudeGeometry(shape, extrudeSet);
+                chassisGeo.center();
+                const chassis = new THREE.Mesh(chassisGeo, paint);
+                chassis.castShadow = true;
+                chassis.position.y = 0.6;
+                container.add(chassis);
+
+                // Add Spoiler for Hyper
+                if(type === 'HYPER') {
+                    const wing = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.05, 2.2), carbon);
+                    wing.position.set(-2.0, 1.1, 0);
+                    container.add(wing);
+                    const leg1 = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), carbon);
+                    leg1.position.set(-2.0, 0.9, 0.5);
+                    const leg2 = leg1.clone(); leg2.position.z = -0.5;
+                    container.add(leg1); container.add(leg2);
+                }
+
+                // Add Wheels
+                const wheelGeo = new THREE.CylinderGeometry(0.35, 0.35, 0.3, 32);
+                const rubber = new THREE.MeshStandardMaterial({color:0x111111});
+                const rim = new THREE.MeshStandardMaterial({color:0xeeeeee, metalness:0.8});
+                
+                container.wheels = [];
+                const positions = [
+                    {x:1.4, z:0.9}, {x:1.4, z:-0.9}, {x:-1.4, z:0.9}, {x:-1.4, z:-0.9}
+                ];
+                
+                positions.forEach(p => {
+                    const wGroup = new THREE.Group();
+                    const tire = new THREE.Mesh(wheelGeo, rubber);
+                    tire.rotation.z = Math.PI/2;
+                    tire.castShadow = true;
+                    
+                    const rimMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.31, 8), rim);
+                    rimMesh.rotation.z = Math.PI/2;
+
+                    wGroup.add(tire); wGroup.add(rimMesh);
+                    wGroup.position.set(p.x, 0.35, p.z);
+                    container.add(wGroup);
+                    container.wheels.push(wGroup);
+                });
+
+                // Headlights
+                const lightGeo = new THREE.BoxGeometry(0.1, 0.1, 0.6);
+                const lightMat = new THREE.MeshBasicMaterial({color:0xaaccff});
+                const l1 = new THREE.Mesh(lightGeo, lightMat); l1.position.set(2.0, 0.6, 0.6);
+                const l2 = l1.clone(); l2.position.z = -0.6;
+                container.add(l1); container.add(l2);
+                
+                // Beams
+                const spot = new THREE.SpotLight(0xffffff, 2, 50, 0.5, 0.5, 0.5);
+                spot.position.set(2, 0.6, 0); spot.target.position.set(10, 0, 0);
+                container.add(spot); container.add(spot.target);
+            } 
+            else if (type === 'BIKE') {
+                // Procedural Bike
+                const bodyGeo = new THREE.BoxGeometry(1.5, 0.6, 0.4);
+                const body = new THREE.Mesh(bodyGeo, paint);
+                body.position.set(0, 0.8, 0); body.castShadow = true;
+                container.add(body);
+
+                // Windshield
+                const wind = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), glass);
+                wind.position.set(0.5, 1.2, 0); wind.rotation.y = -Math.PI/2; wind.rotation.x = -0.5; wind.material.side = THREE.DoubleSide;
+                container.add(wind);
+
+                // Wheels
+                const wheelGeo = new THREE.TorusGeometry(0.35, 0.15, 16, 32);
+                const rubber = new THREE.MeshStandardMaterial({color:0x111111});
+                
+                const w1 = new THREE.Mesh(wheelGeo, rubber); w1.position.set(1.0, 0.5, 0);
+                const w2 = new THREE.Mesh(wheelGeo, rubber); w2.position.set(-1.0, 0.5, 0);
+                container.add(w1); container.add(w2);
+                container.wheels = [w1, w2];
+            }
+
+            return container;
+        }
+
+        // Initialize Cars for Showroom
+        const showroomGroup = new THREE.Group();
+        scene.add(showroomGroup);
+        
+        // Setup Player Car Variable
+        let playerCar = createVehicle(CAR_DATA[0].type, CAR_DATA[0].color);
+        showroomGroup.add(playerCar);
+
+        // --- INPUT & PHYSICS ---
+        const keys = { w: false, a: false, s: false, d: false, space: false };
+        window.addEventListener('keydown', (e) => {
+            if(e.key === 'ArrowLeft') if(STATE.mode === 'showroom') changeCar(-1); else keys.a = true;
+            if(e.key === 'ArrowRight') if(STATE.mode === 'showroom') changeCar(1); else keys.d = true;
+            if(e.key === 'ArrowUp') keys.w = true;
+            if(e.key === 'ArrowDown') keys.s = true;
+            if(e.key === 'w' || e.key === 'W') keys.w = true;
+            if(e.key === 's' || e.key === 'S') keys.s = true;
+            if(e.key === 'a' || e.key === 'A') keys.a = true;
+            if(e.key === 'd' || e.key === 'D') keys.d = true;
+            if(e.key === ' ') keys.space = true;
+            if(e.key === 'Enter' && STATE.mode === 'showroom') startGame();
+        });
+        window.addEventListener('keyup', (e) => {
+            if(e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') keys.w = false;
+            if(e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') keys.s = false;
+            if(e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') keys.a = false;
+            if(e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') keys.d = false;
+            if(e.key === ' ') keys.space = false;
+        });
+
+        // Showroom Logic
+        function changeCar(dir) {
+            STATE.currentCarIdx += dir;
+            if(STATE.currentCarIdx < 0) STATE.currentCarIdx = CAR_DATA.length - 1;
+            if(STATE.currentCarIdx >= CAR_DATA.length) STATE.currentCarIdx = 0;
+            
+            updateShowroomUI();
+        }
+
+        function updateShowroomUI() {
+            const data = CAR_DATA[STATE.currentCarIdx];
+            // Animate Text Change
+            const title = document.getElementById('car-name');
+            title.style.opacity = 0;
+            
+            setTimeout(() => {
+                title.innerText = data.name;
+                document.getElementById('stat-hp').innerText = data.hp;
+                document.getElementById('stat-acc').innerText = data.acc;
+                document.getElementById('stat-type').innerText = data.type;
+                title.style.opacity = 1;
+                
+                // Rebuild mesh
+                showroomGroup.remove(playerCar);
+                playerCar = createVehicle(data.type, data.color);
+                showroomGroup.add(playerCar);
+            }, 200);
+        }
+
+        function startGame() {
+            STATE.mode = 'drive';
+            // Transition UI
+            document.getElementById('showroom-ui').style.opacity = 0;
+            setTimeout(() => {
+                document.getElementById('showroom-ui').style.display = 'none';
+                document.getElementById('game-hud').style.opacity = 1;
+            }, 800);
+            
+            // Move Car to Start Line
+            showroomGroup.remove(playerCar);
+            scene.add(playerCar);
+            playerCar.position.set(0, 0.5, 0);
+        }
+
+        // --- PHYSICS ENGINE ---
+        const physics = {
+            pos: new THREE.Vector3(),
+            velocity: new THREE.Vector3(),
+            speed: 0,
+            angle: -Math.PI/2,
+            drift: 0
+        };
+
+        const clock = new THREE.Clock();
+
+        function updatePhysics(dt) {
+            if(STATE.mode !== 'drive') return;
+            
+            const data = CAR_DATA[STATE.currentCarIdx].physics;
+
+            // Acceleration
+            if(keys.w) physics.speed += data.acc;
+            if(keys.s) physics.speed -= data.acc;
+            
+            // Drag & Friction
+            physics.speed *= 0.98;
+            if(keys.space) physics.speed *= 0.95; // Brake
+
+            // Cap Speed
+            physics.speed = Math.max(Math.min(physics.speed, data.maxSpeed), -data.maxSpeed/2);
+
+            // Steering
+            if(Math.abs(physics.speed) > 0.1) {
+                const turnFactor = Math.abs(physics.speed) / data.maxSpeed;
+                const dir = keys.a ? 1 : keys.d ? -1 : 0;
+                
+                // Drift Logic
+                let driftTarget = 0;
+                if(keys.space && Math.abs(dir) > 0) {
+                    driftTarget = dir * 0.8; // Slide
+                    physics.speed *= 0.99;
+                }
+                
+                physics.drift = THREE.MathUtils.lerp(physics.drift, driftTarget, 0.1);
+                physics.angle += (dir * 2.0 * dt) * (turnFactor + 0.2);
+            } else {
+                physics.drift = 0;
+            }
+
+            // Movement Vector (Slip Angle)
+            const forward = new THREE.Vector3(Math.cos(physics.angle), 0, Math.sin(physics.angle));
+            const side = new THREE.Vector3(Math.cos(physics.angle + Math.PI/2), 0, Math.sin(physics.angle + Math.PI/2));
+            
+            // Apply Velocity
+            const totalVec = forward.multiplyScalar(physics.speed).add(side.multiplyScalar(physics.drift * physics.speed));
+            physics.pos.add(totalVec);
+
+            // Terrain Collision
+            const terrainHeight = Math.sin(physics.pos.x*0.02)*Math.cos(physics.pos.z*0.02)*2;
+            const roadHeight = Math.abs(physics.pos.x) < 30 ? 0 : terrainHeight;
+            
+            physics.pos.y = THREE.MathUtils.lerp(playerCar.position.y, roadHeight + 0.5, 0.2);
+
+            // --- VISUAL UPDATES ---
+            playerCar.position.copy(physics.pos);
+            
+            // Car Body Rotation
+            const roll = (keys.a ? 1 : keys.d ? -1 : 0) * (physics.speed/2) * 0.1;
+            
+            if(data.type === 'bike') {
+                playerCar.rotation.set(0, -physics.angle + Math.PI/2, roll * 5); // Bike leans hard
+            } else {
+                // Car drifts (Yaw) + Suspnesion Roll
+                playerCar.rotation.set(0, -physics.angle - physics.drift + Math.PI/2, roll);
+            }
+
+            // Wheel Animation
+            playerCar.wheels.forEach((w, i) => {
+                w.rotation.x -= physics.speed * 0.5;
+                // Front wheels steer (if car)
+                if(data.type === 'car' && i < 2) {
+                    w.rotation.y = (keys.a ? 0.3 : keys.d ? -0.3 : 0);
+                }
+            });
+
+            // Camera Chase
+            const camDist = 8 + Math.abs(physics.speed);
+            const targetCam = new THREE.Vector3(
+                physics.pos.x - Math.cos(physics.angle) * camDist,
+                physics.pos.y + 4,
+                physics.pos.z - Math.sin(physics.angle) * camDist
+            );
+            camera.position.lerp(targetCam, 0.1);
+            camera.lookAt(playerCar.position.x, playerCar.position.y + 1, playerCar.position.z);
+
+            // Update HUD
+            const kph = Math.floor(Math.abs(physics.speed) * 80);
+            document.getElementById('hud-speed').innerText = kph;
+            const rpm = Math.min((kph / 350) * 100, 100);
+            document.getElementById('hud-rpm').style.width = rpm + '%';
+        }
+
+        // --- MAIN LOOP ---
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const dt = clock.getDelta();
+            const time = clock.getElapsedTime();
+
+            if(STATE.mode === 'showroom') {
+                // Turntable
+                STATE.cameraAngle += dt * 0.2;
+                const r = 9;
+                camera.position.x = Math.cos(STATE.cameraAngle) * r;
+                camera.position.z = Math.sin(STATE.cameraAngle) * r;
+                camera.position.y = 2 + Math.sin(time) * 0.5;
+                camera.lookAt(0, 0.5, 0);
+                playerCar.rotation.y = -Math.PI/2; // Fix orientation
+            } else {
+                updatePhysics(dt);
+            }
+
+            composer.render();
+        }
+
+        // Handle Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
